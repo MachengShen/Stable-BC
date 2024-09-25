@@ -26,17 +26,20 @@ def get_dataset(cfg):
     num_trajectories = cfg.num_demos
     dataset = []
     dataset_ccil = []
+    dataset_with_trajectory = []
     goal_x = np.array([10., 0.])
     goal_y = np.array([0., 10.])
     for _ in range(num_trajectories):
         x = np.random.uniform([-10, -10], [0, 10], 2)
         y = np.random.uniform([-10, -10], [10, 0], 2)
         tau = []
+        tau_with_action = []
         for idx in range(20):
             u1 = agent(x, y, goal_x)
             u2 = agent(y, x, goal_y)
             state = np.array([x[0], x[1], y[0], y[1]])
             tau.append(list(state))
+            tau_with_action.append(list(state) + list(u1))
             dataset.append(list(state) + list(u1))
 
             # upsampled dataset for minimal CCIL implementation      
@@ -48,8 +51,11 @@ def get_dataset(cfg):
                 dataset_ccil.append(list(state1) + list(action1))
             x += u1
             y += u2
+        dataset_with_trajectory.append(tau_with_action)
 
     json.dump(dataset, open("data/data.json", "w"))
     json.dump(dataset_ccil, open("data/data_ccil.json", "w"))
+    json.dump(dataset_with_trajectory, open("data/data_with_trajectory.json", "w"))
     print("dataset has this many state-action pairs:", len(dataset))
     print("CCIL dataset has this many state-action pairs:", len(dataset_ccil))
+    print("Trajectory dataset has this many trajectories:", len(dataset_with_trajectory))

@@ -2,7 +2,7 @@ import hydra
 from omegaconf import DictConfig
 import os, sys
 from get_demos import get_dataset
-from train import train_model
+from train import train_model, train_model_joint
 from rollout import rollout_policy
 
 
@@ -15,7 +15,8 @@ def main(cfg=DictConfig):
         get_dataset(cfg)
 
     if cfg.train:
-        train_model(cfg)
+        # train_model(cfg)
+        train_model_joint(cfg)
 
     if cfg.rollout:
         rollout_policy(cfg)

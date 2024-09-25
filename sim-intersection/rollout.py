@@ -18,12 +18,32 @@ def new_agent(y, goal, beta=20.0):
     idx = np.random.choice(len(U), p=P)
     return U[idx, :]
 
+
+
 # rollout the learned policy
 def rollout(cfg):
+    if cfg.alg == 'joint_bc':
+        joint = True
+        denoising = False
+    elif cfg.alg == 'joint_denoising_bc':
+        joint = True
+        denoising = True
+    else:
+        joint = False
+        denoising = False
+        
     test_case = cfg.test_case
-    model = MyModel()
-    model.load_state_dict(torch.load('data/model_{}.pt'.format(cfg.alg)))
-    model.eval() 
+    if joint:
+        model = MyModel(input_dim=4, output_dim=6)
+        denoising_model = MyModel(input_dim=10, output_dim=6)
+        model.load_state_dict(torch.load('data/joint_bc_model.pt'))
+        denoising_model.load_state_dict(torch.load('data/joint_denoising_model.pt'))
+        model.eval()
+        denoising_model.eval()
+    else:
+        model = MyModel()
+        model.load_state_dict(torch.load('data/model_{}.pt'.format(cfg.alg)))
+        model.eval() 
     tau = []
     total_cost = 0.
     
@@ -44,7 +64,19 @@ def rollout(cfg):
     for idx in range(20):
         tau.append(list(state))
         # robot is controlled by behavior cloned policy
-        u1 = model(torch.FloatTensor(state)).detach().numpy()
+        if joint:
+            action_next_state = model(torch.FloatTensor(state))
+            if denoising:
+                denoising_input = torch.cat([torch.FloatTensor(state), action_next_state])
+                denoising_output = denoising_model(denoising_input)
+                u1 = denoising_output[:2].detach().numpy()
+                next_state = denoising_output[2:].detach().numpy()
+            else:
+                u1 = action_next_state[:2].detach().numpy()
+                next_state = action_next_state[2:].detach().numpy()
+        else:
+            u1 = model(torch.FloatTensor(state)).detach().numpy()
+            
         if np.linalg.norm(u1) > 1.0:
             u1 /= np.linalg.norm(u1)
 

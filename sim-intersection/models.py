@@ -13,13 +13,13 @@ def weights_init_(m):
 
 
 class MyModel(nn.Module):
-    def __init__(self):
+    def __init__(self, input_dim=4, output_dim=2, hidden_dim=64):
         super(MyModel, self).__init__()
 
         # multi-layer perceptron
-        self.pi_1 = nn.Linear(4, 64)
-        self.pi_2 = nn.Linear(64, 64)
-        self.pi_3 = nn.Linear(64, 2)
+        self.pi_1 = nn.Linear(input_dim, hidden_dim)
+        self.pi_2 = nn.Linear(hidden_dim, hidden_dim)
+        self.pi_3 = nn.Linear(hidden_dim, output_dim)
 
         # other stuff
         self.m = nn.ReLU()
