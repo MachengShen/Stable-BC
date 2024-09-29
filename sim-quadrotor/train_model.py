@@ -10,6 +10,7 @@ from tqdm import tqdm
 import os, sys
 from torch.utils.tensorboard import SummaryWriter
 import datetime
+from config import Config
 
 A_G = 9.81
 
@@ -239,15 +240,14 @@ def train_model(
     torch.save(model.state_dict(), models_path + "/" + savename)
 
 
-def train_imitation_agent(num_dems, type: int, random_seed):
-    EPOCH = 1000
-    LR = 0.001
+def train_imitation_agent(num_dems, type: int, random_seed, Config):
+    EPOCH = Config.EPOCH
+    LR = Config.LR
     
     if type == 2:  # Joint training
-        train_model_joint(num_dems, random_seed, EPOCH, LR, )
+        train_model_joint(num_dems, random_seed, Config)
     else:
-
-        stability_loss_coef = 0.0001
+        stability_loss_coef = Config.STABILITY_LOSS_COEF
         import os
 
         # Change the working directory to the sim-quadrotor folder
@@ -317,7 +317,7 @@ def get_statistics(controls_list, x_traj_list):
     return controls_std, x_traj_std
 
 
-def train_model_joint(num_dems, random_seed, EPOCH, LR, overall_noise_factor, action_loss_weight, state_loss_weight, save_ckpt=True):
+def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
     data_dict = pickle.load(open("sim-quadrotor/data/data_0.pkl", "rb"))
     controls_list = data_dict["controls_list"]
     x_traj_list = data_dict["x_trajectories_list"]
@@ -343,18 +343,18 @@ def train_model_joint(num_dems, random_seed, EPOCH, LR, overall_noise_factor, ac
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = MyModel(
         input_dim=6, output_dim=9, is_denoising_net=False, joint_action_state=True,
-        action_loss_weight=action_loss_weight, state_loss_weight=state_loss_weight
+        action_loss_weight=Config.ACTION_LOSS_WEIGHT, state_loss_weight=Config.STATE_LOSS_WEIGHT
     )
     denoising_model = MyModel(
         input_dim=15, output_dim=9, is_denoising_net=True, joint_action_state=True,
-        action_loss_weight=action_loss_weight, state_loss_weight=state_loss_weight
+        action_loss_weight=Config.ACTION_LOSS_WEIGHT, state_loss_weight=Config.STATE_LOSS_WEIGHT
     )
     model.to(device)
     denoising_model.to(device)
 
-    optimizer_model = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=1e-5)
+    optimizer_model = torch.optim.Adam(model.parameters(), lr=Config.LR, weight_decay=1e-5)
     optimizer_denoising = torch.optim.Adam(
-        denoising_model.parameters(), lr=LR, weight_decay=1e-5
+        denoising_model.parameters(), lr=Config.LR, weight_decay=1e-5
     )
 
     # Load and prepare datasets
@@ -364,7 +364,7 @@ def train_model_joint(num_dems, random_seed, EPOCH, LR, overall_noise_factor, ac
         controls_list=train_controls_list,
         action_noise_factor=controls_std,
         state_noise_factor=x_traj_std,
-        overall_noise_factor=overall_noise_factor
+        overall_noise_factor=Config.OVERALL_NOISE_FACTOR
     )
     val_bc_dataset = BCDataset(x_traj_list=val_x_traj_list, controls_list=val_controls_list)
     val_denoising_dataset = DenoisingDataset(
@@ -372,10 +372,10 @@ def train_model_joint(num_dems, random_seed, EPOCH, LR, overall_noise_factor, ac
         controls_list=val_controls_list,
         action_noise_factor=controls_std,
         state_noise_factor=x_traj_std,
-        overall_noise_factor=overall_noise_factor
+        overall_noise_factor=Config.OVERALL_NOISE_FACTOR
     )
 
-    BATCH_SIZE = int(len(train_bc_dataset) / 10)
+    BATCH_SIZE = Config.BATCH_SIZE
     train_bc_dataloader = torch.utils.data.DataLoader(
         train_bc_dataset, batch_size=BATCH_SIZE, shuffle=True
     )
@@ -390,12 +390,10 @@ def train_model_joint(num_dems, random_seed, EPOCH, LR, overall_noise_factor, ac
     )
 
     # Set up TensorBoard
-
-    current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    writer = SummaryWriter(f'runs/joint_training_{num_dems}dems_{random_seed}_{current_time}')
+    writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed))
 
     # Training loop
-    for EPOCH in range(EPOCH):
+    for epoch in range(Config.EPOCH):
         model.train()
         denoising_model.train()
         total_bc_loss = 0
@@ -441,12 +439,12 @@ def train_model_joint(num_dems, random_seed, EPOCH, LR, overall_noise_factor, ac
             total_denoising_loss += denoising_loss.item()
 
             train_bar.set_description(
-                f"Epoch {EPOCH}, BC Loss: {total_bc_loss / (batch_idx + 1):.4f}, Denoising Loss: {total_denoising_loss / (batch_idx + 1):.4f}"
+                f"Epoch {epoch}, BC Loss: {total_bc_loss / (batch_idx + 1):.4f}, Denoising Loss: {total_denoising_loss / (batch_idx + 1):.4f}"
             )
 
             # Log training losses
-            writer.add_scalar('Training/BC Loss', bc_loss.item(), EPOCH * len(train_bc_dataloader) + batch_idx)
-            writer.add_scalar('Training/Denoising Loss', denoising_loss.item(), EPOCH * len(train_denoising_dataloader) + batch_idx)
+            writer.add_scalar('Training/BC Loss', bc_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
+            writer.add_scalar('Training/Denoising Loss', denoising_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
 
         # Validation
         model.eval()
@@ -473,15 +471,15 @@ def train_model_joint(num_dems, random_seed, EPOCH, LR, overall_noise_factor, ac
         val_bc_loss /= len(val_bc_dataloader)
         val_denoising_loss /= len(val_denoising_dataloader)
 
-        print(f"Epoch {EPOCH}, Validation BC Loss: {val_bc_loss:.4f}, Validation Denoising Loss: {val_denoising_loss:.4f}")
+        print(f"Epoch {epoch}, Validation BC Loss: {val_bc_loss:.4f}, Validation Denoising Loss: {val_denoising_loss:.4f}")
 
         # Log validation losses
-        writer.add_scalar('Validation/BC Loss', val_bc_loss, EPOCH)
-        writer.add_scalar('Validation/Denoising Loss', val_denoising_loss, EPOCH)
+        writer.add_scalar('Validation/BC Loss', val_bc_loss, epoch)
+        writer.add_scalar('Validation/Denoising Loss', val_denoising_loss, epoch)
 
     if save_ckpt:
         # Save the trained models
-        models_path = f"sim-quadrotor/results_{LR}lr_{EPOCH}epoch/joint_training/{num_dems}dems/{random_seed}"
+        models_path = Config.get_model_path(num_dems, random_seed)
         if not os.path.exists(models_path):
             os.makedirs(models_path)
 

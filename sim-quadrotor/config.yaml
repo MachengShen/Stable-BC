@@ -1,0 +1,17 @@
+# General settings
+cuda_visible_devices: "0"
+
+# Training settings
+epoch: 300
+lr: 0.00027
+batch_size: 128
+stability_loss_coef: 0.0001
+
+# Dataset settings
+overall_noise_factor: 0.046
+action_loss_weight: 0.77
+state_loss_weight: 0.23
+
+# Paths
+data_path: "sim-quadrotor/data/data_0.pkl"
+base_log_path: "sim-quadrotor/logs"
