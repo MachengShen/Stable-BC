@@ -126,10 +126,23 @@ def generate_imitating_agent_trajectories_action_noise_sequential(initial_condit
     
 
 
+class ImitatingAgent:
+    def __init__(self, model, denoising_model):
+        self.model = model
+        self.model.eval()
+        self.denoising_model = denoising_model
+        self.denoising_model.eval()
+        
+    def get_action(self, state_array, device):
+        state_array = torch.tensor(state_array.flatten(), dtype=torch.float32).to(device)
+        action_next_state = self.model(state_array)
+        # if np.random.rand() < 0.00005:
+        #     print("Warning: not using denoising model")
+        action_next_state = self.denoising_model(torch.cat([state_array, action_next_state]))
+        return action_next_state[:3]
 
 
-
-def test_imitation_agent( num_dems, type, random_seed, test_name, base_path = None):
+def test_imitation_agent( num_dems, type, random_seed, test_name, base_path = None, early_return = False, bc_model = None, denoising_model = None):
     n_test_trajs = 100
 
     x_goal = np.array([4.0, 2.5, 2.5])
@@ -146,12 +159,28 @@ def test_imitation_agent( num_dems, type, random_seed, test_name, base_path = No
     THRUST_BOUND = [A_G - f_g_diff_max, A_G + f_g_diff_max]
     control_bounds = torch.tensor([ THRUST_BOUND, ROLL_BOUND, PITCH_BOUND]).T
 
+    # import os 
+    # # Set the current directory as the working directory
+    # current_dir = os.path.dirname(os.path.abspath(__file__))
+    # os.chdir(current_dir)
+    # print(f"Current working directory: {os.getcwd()}")
+    
     models_path= base_path + f'/{num_dems}dems/{random_seed}'
+    if type in [0, 1]:
+        model_path = models_path + f"/im_model{type}.pt"
+        im_model = MyModel()
+        im_model.load_state_dict(torch.load( model_path ))
+    else:
+        assert type == 2
+        if bc_model is None or denoising_model is None:
+            model_path = f"sim-quadrotor/results_0.001lr_1000epoch/joint_training/{num_dems}dems/{random_seed}/joint_bc_model.pt"
+            denoising_model_path = f"sim-quadrotor/results_0.001lr_1000epoch/joint_training/{num_dems}dems/{random_seed}/joint_denoising_model.pt"
+            bc_model= MyModel(input_dim=6, output_dim=9, is_denoising_net=False) #
+            denoising_model = MyModel(input_dim=15, output_dim=9, is_denoising_net=True)
+            bc_model.load_state_dict(torch.load( model_path ))
+            denoising_model.load_state_dict(torch.load( denoising_model_path ))
+        im_model = ImitatingAgent(model=bc_model, denoising_model=denoising_model)
 
-    model_path = models_path + f"/im_model{type}.pt"
-
-    im_model = MyModel()
-    im_model.load_state_dict(torch.load( model_path ))
 
     if test_name == 'training_region':
         # sample initial conditions
@@ -162,6 +191,9 @@ def test_imitation_agent( num_dems, type, random_seed, test_name, base_path = No
 
     im_success_trajectories_list, im_success_controls_list, im_fail_trajectories_list, im_fail_controls_list = \
         generate_imitating_agent_trajectories_action_noise_sequential(test_initial_conditions_array, im_model, x_goal, obstacle_list, map_boundaries, control_bounds, device = 'cpu' )
+    
+    if early_return:
+        return len(im_success_trajectories_list) / n_test_trajs
     
     result_save_path = models_path + f'/{test_name}_noise0.1'
     if not os.path.exists(result_save_path):
@@ -178,6 +210,8 @@ def test_imitation_agent( num_dems, type, random_seed, test_name, base_path = No
         f.write(f'\n {num_dems} \n')
         success_rate = len(im_success_trajectories_list) / n_test_trajs
         f.write(f'\n success rate: {success_rate} \n')
+
+
 
     # save the test results
     pickle.dump( {'success_trajectories_list': im_success_trajectories_list, 'success_controls_list': im_success_controls_list, 
