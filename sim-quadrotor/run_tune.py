@@ -1,5 +1,5 @@
 import optuna
-from train_model import train_model_joint
+from train_model import train_model_joint, save_models
 from test_model import test_imitation_agent
 import os
 import numpy as np
@@ -11,10 +11,10 @@ def objective(trial):
     Config.STATE_NOISE_MULTIPLIER = trial.suggest_float("state_noise_multiplier", 0.01, 0.1)
     Config.ACTION_LOSS_WEIGHT_BC = trial.suggest_float("action_loss_weight_bc", 0.3, 1.0)
     Config.ACTION_LOSS_WEIGHT_DENOISING = trial.suggest_float("action_loss_weight_denoising", 0.05, 1.0)
-    Config.LR = trial.suggest_float("learning_rate", 1e-4, 1e-3, log=True)
+    Config.LR = trial.suggest_float("learning_rate", 5e-4, 2e-3, log=True)
 
     # Fixed parameters
-    num_dems = 10
+    num_dems = Config.NUM_DEMS
     random_seed = np.random.randint(1, 11)
 
     # Train the model with the current hyperparameters
@@ -46,18 +46,18 @@ def objective(trial):
     # Calculate the average success rate
     average_success_rate = np.mean(success_rates)
 
-    return average_success_rate
+    return average_success_rate, bc_model, denoising_model, num_dems, random_seed
 
 def run_hyperparameter_tuning():
     study = optuna.create_study(direction="maximize")
     
     best_value = float('-inf')
     best_trial = None
-    best_trial_file = 'best_trials.txt'
+    best_trial_file = f'best_trials_num_dems_{Config.NUM_DEMS}.txt'
 
-    for trial_number in range(50):
+    for trial_number in range(500):
         trial = study.ask()
-        value = objective(trial)
+        value, bc_model, denoising_model, num_dems, random_seed = objective(trial)
         study.tell(trial, value)
 
         if value > best_value:
@@ -78,6 +78,8 @@ def run_hyperparameter_tuning():
                 f.write("Params:\n")
                 for key, value in best_trial.params.items():
                     f.write(f"    {key}: {value}\n")
+                    
+            save_models(bc_model, denoising_model, num_dems, random_seed, Config)
 
     print("\nFinal Best trial:")
     print(f"Value: {best_value}")

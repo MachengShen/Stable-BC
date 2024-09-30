@@ -11,10 +11,10 @@ if __name__ == "__main__":
         10,
         20,
     ]  # , 40, 60, 100 ] # [ 5, 10, 15, 20, 25 ] # [ i for i in range( 1, 10 )]
-    random_seed_list = [i for i in range(7)]  # [ i for i in range( 10 )]
+    random_seed_list = [i for i in range(1)]  # [ i for i in range( 10 )]
     test_name_list = ["training_region"]
 
-    base_path_list = ["sim-quadrotor/logs/20240929-112101/results_0.00027lr_300epoch"]#"sim-quadrotor/results_0.001lr_1000epoch/lamda_0.0001", 
+    base_path_list = ["sim-quadrotor/logs/20240930-102357/results_0.0004lr_100epoch"]#"sim-quadrotor/results_0.001lr_1000epoch/lamda_0.0001", 
 
     for base_path in base_path_list:
         for n_dems in n_dems_list:

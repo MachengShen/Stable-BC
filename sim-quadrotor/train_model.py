@@ -318,6 +318,13 @@ def get_statistics(controls_list, x_traj_list):
     print("Trajectory std:", x_traj_std)
     return controls_std, x_traj_std
 
+def save_models(model, denoising_model, num_dems, random_seed, Config):
+    models_path = Config.get_model_path(num_dems, random_seed)
+    if not os.path.exists(models_path):
+        os.makedirs(models_path)
+
+    torch.save(model.state_dict(), f"{models_path}/joint_bc_model.pt")
+    torch.save(denoising_model.state_dict(), f"{models_path}/joint_denoising_model.pt")
 
 def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
     data_dict = pickle.load(open("sim-quadrotor/data/data_0.pkl", "rb"))
@@ -483,12 +490,7 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
 
     if save_ckpt:
         # Save the trained models
-        models_path = Config.get_model_path(num_dems, random_seed)
-        if not os.path.exists(models_path):
-            os.makedirs(models_path)
-
-        torch.save(model.state_dict(), f"{models_path}/joint_bc_model.pt")
-        torch.save(denoising_model.state_dict(), f"{models_path}/joint_denoising_model.pt")
+        save_models(model, denoising_model, num_dems, random_seed, Config)
 
     print("Joint training completed and models saved.")
     writer.close()

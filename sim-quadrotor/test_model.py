@@ -16,8 +16,8 @@ from quadrotor_mppi import *
 
 
 def get_imitation_agent_action(imitating_agent, state_array, control_bounds, device):
-    upper_bound = control_bounds[1]
-    lower_bound = control_bounds[0]
+    upper_bound = control_bounds[1].to(device)
+    lower_bound = control_bounds[0].to(device)
     action = imitating_agent.get_action(state_array, device)
     action = torch.minimum(action, upper_bound)
     action = torch.maximum(action, lower_bound)
@@ -140,7 +140,7 @@ def get_imitating_agent_trajectory_action_noise(
             imitating_agent, state_array, control_bounds, device
         )
 
-        action = action.detach().numpy()
+        action = action.detach().cpu().numpy()
         control_list.append(action)
         trajectory_list.append(state_array)
         applied_action = action + np.random.normal(0, noise_std)
@@ -210,9 +210,9 @@ class ImitatingAgent:
             device
         )
         action_next_state = self.model(state_array)
-        if np.random.rand() < 0.00005:
-            print("Warning: not using denoising model")
-        # action_next_state = self.denoising_model(torch.cat([state_array, action_next_state]))
+        # if np.random.rand() < 0.00005:
+        #     print("Warning: not using denoising model")
+        action_next_state = self.denoising_model(torch.cat([state_array, action_next_state]))
         return action_next_state[:3]
 
 
@@ -254,19 +254,20 @@ def test_imitation_agent(
     # print(f"Current working directory: {os.getcwd()}")
 
     models_path = base_path + f"/{num_dems}dems/{random_seed}"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if type in [0, 1]:
         model_path = models_path + f"/im_model{type}.pt"
-        im_model = MyModel()
-        im_model.load_state_dict(torch.load(model_path))
+        im_model = MyModel().to(device)
+        im_model.load_state_dict(torch.load(model_path, map_location=device))
     else:
         assert type == 2
         if bc_model is None or denoising_model is None:
             model_path = f"{base_path}/joint_training/{num_dems}dems/{random_seed}/joint_bc_model.pt"
             denoising_model_path = f"{base_path}/joint_training/{num_dems}dems/{random_seed}/joint_denoising_model.pt"
-            bc_model = MyModel(input_dim=6, output_dim=9, is_denoising_net=False)  #
-            denoising_model = MyModel(input_dim=15, output_dim=9, is_denoising_net=True)
-            bc_model.load_state_dict(torch.load(model_path))
-            denoising_model.load_state_dict(torch.load(denoising_model_path))
+            bc_model = MyModel(input_dim=6, output_dim=9, is_denoising_net=False).to(device)
+            denoising_model = MyModel(input_dim=15, output_dim=9, is_denoising_net=True).to(device)
+            bc_model.load_state_dict(torch.load(model_path, map_location=device))
+            denoising_model.load_state_dict(torch.load(denoising_model_path, map_location=device))
         im_model = ImitatingAgent(model=bc_model, denoising_model=denoising_model)
 
     if test_name == "training_region":
@@ -290,7 +291,7 @@ def test_imitation_agent(
         obstacle_list,
         map_boundaries,
         control_bounds,
-        device="cpu",
+        device=device,
     )
 
     if early_return:
