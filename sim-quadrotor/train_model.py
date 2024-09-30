@@ -79,13 +79,15 @@ class DenoisingDataset(Dataset):
         controls_list,
         action_noise_factor,
         state_noise_factor,
-        overall_noise_factor=0.02,
+        action_noise_multiplier=0.02,
+        state_noise_multiplier=0.02,
     ):
         self.x_traj_list = x_traj_list
         self.controls_list = controls_list
         self.action_noise_factor = action_noise_factor
         self.state_noise_factor = state_noise_factor
-        self.overall_noise_factor = overall_noise_factor
+        self.action_noise_multiplier = action_noise_multiplier
+        self.state_noise_multiplier = state_noise_multiplier
 
     def __len__(self):
         return sum(len(traj) - 1 for traj in self.x_traj_list)
@@ -103,13 +105,13 @@ class DenoisingDataset(Dataset):
 
         noisy_a_t = (
             clean_a_t
-            + self.overall_noise_factor
+            + self.action_noise_multiplier
             * self.action_noise_factor
             * np.random.randn(*clean_a_t.shape)
         )
         noisy_x_t_plus_1 = (
             clean_x_t_plus_1
-            + self.overall_noise_factor
+            + self.state_noise_multiplier
             * self.state_noise_factor
             * np.random.randn(*clean_x_t_plus_1.shape)
         )
@@ -343,11 +345,11 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = MyModel(
         input_dim=6, output_dim=9, is_denoising_net=False, joint_action_state=True,
-        action_loss_weight=Config.ACTION_LOSS_WEIGHT, state_loss_weight=Config.STATE_LOSS_WEIGHT
+        action_loss_weight=Config.ACTION_LOSS_WEIGHT_BC, state_loss_weight=Config.STATE_LOSS_WEIGHT_BC
     )
     denoising_model = MyModel(
         input_dim=15, output_dim=9, is_denoising_net=True, joint_action_state=True,
-        action_loss_weight=Config.ACTION_LOSS_WEIGHT, state_loss_weight=Config.STATE_LOSS_WEIGHT
+        action_loss_weight=Config.ACTION_LOSS_WEIGHT_DENOISING, state_loss_weight=Config.STATE_LOSS_WEIGHT_DENOISING
     )
     model.to(device)
     denoising_model.to(device)
@@ -364,7 +366,8 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
         controls_list=train_controls_list,
         action_noise_factor=controls_std,
         state_noise_factor=x_traj_std,
-        overall_noise_factor=Config.OVERALL_NOISE_FACTOR
+        action_noise_multiplier=Config.ACTION_NOISE_MULTIPLIER,
+        state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER
     )
     val_bc_dataset = BCDataset(x_traj_list=val_x_traj_list, controls_list=val_controls_list)
     val_denoising_dataset = DenoisingDataset(
@@ -372,7 +375,8 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
         controls_list=val_controls_list,
         action_noise_factor=controls_std,
         state_noise_factor=x_traj_std,
-        overall_noise_factor=Config.OVERALL_NOISE_FACTOR
+        action_noise_multiplier=Config.ACTION_NOISE_MULTIPLIER,
+        state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER
     )
 
     BATCH_SIZE = Config.BATCH_SIZE
