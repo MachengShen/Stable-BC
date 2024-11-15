@@ -1,22 +1,35 @@
 # General settings
 cuda_visible_devices: "0"
 
+# ['walker2d-expert-v2_20', 
+# 'hopper-expert-v2_25', 
+# 'ant-expert-v2_10', 
+# 'f1', 
+# 'pendulum_disc_500', 
+# 'metaworld-button-press-top-down-v2', 
+# 'circle_50', 
+# 'hover_5', 
+# 'halfcheetah-expert-v2_50', 
+# 'metaworld-coffee-push-v2_50', 
+# 'pendulum_cont_100', 
+# 'metaworld-coffee-pull-v2_50', 
+# 'pendulumswingup-v0', 
+# 'flythrugate_50', 
+# 'metaworld-drawer-close-v2']
+
 # Task settings
-task_type: "sim-quadrotor"  # Options: "sim-quadrotor", "sim-intersection", "CCIL"
-ccil_data_dir: "CCIL-main/data"  # Only needed for CCIL tasks
-ccil_task_name: "door_opening"    # Only needed for CCIL tasks
+task_type: "CCIL"  # Options: "sim-quadrotor", "sim-intersection", "CCIL"
+ccil_data_dir: "../CCIL-main/data"  # Only needed for CCIL tasks
+ccil_task_name: "pendulum_cont_100"    # Only needed for CCIL tasks
 
 # Dataset settings
 num_dems: 100
-data_paths:
-  sim-quadrotor: "sim-quadrotor/data/data_0.pkl"
-  sim-intersection: "sim-intersection/data/data_0.pkl"
-  CCIL: "CCIL-main/data"
 
 # Training settings
 epoch: 300
 lr: 0.0004
 batch_size: 1024
+# stable bc hparam
 stability_loss_coef: 0.0001
 
 # Dataset settings
@@ -26,7 +39,4 @@ action_loss_weight_bc: 0.72
 action_loss_weight_denoising: 0.53
 
 # Logging paths
-base_log_paths:
-  sim-quadrotor: "sim-quadrotor/logs"
-  sim-intersection: "sim-intersection/logs"
-  CCIL: "CCIL-main/logs"
+base_log_path: "/cephfs/cjyai/joint_denoising_bc/"

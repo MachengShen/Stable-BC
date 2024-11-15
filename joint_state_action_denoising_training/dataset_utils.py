@@ -114,18 +114,19 @@ def read_ccil_data(directory='/root/neural_sde/CCIL-main/data/'):
 
 def load_data(Config):
     if Config.TASK_TYPE == "sim-quadrotor":
-        data_dict = pickle.load(open("sim-quadrotor/data/data_0.pkl", "rb"))
+        data_dict = pickle.load(open("../sim-quadrotor/sim-quadrotor/data/data_0.pkl", "rb"))
         controls_list = data_dict["controls_list"]
         x_traj_list = data_dict["x_trajectories_list"]
     
     elif Config.TASK_TYPE == "sim-intersection":
-        data_dict = pickle.load(open("sim-intersection/data/data_0.pkl", "rb"))
+        data_dict = pickle.load(open("../sim-intersection/sim-intersection/data/data_0.pkl", "rb"))
         controls_list = data_dict["controls_list"]
         x_traj_list = data_dict["x_trajectories_list"]
     
     elif Config.TASK_TYPE == "CCIL":
         # Load CCIL data using the read_data function
         data = read_ccil_data(Config.CCIL_DATA_DIR)
+        print(data.keys())
         task_data = data[Config.CCIL_TASK_NAME]
         
         # Convert CCIL format to our format
@@ -140,3 +141,4 @@ def load_data(Config):
             x_traj_list.append(observations)
     else:
         raise ValueError(f"Unknown task type: {Config.TASK_TYPE}")
+    return controls_list, x_traj_list

@@ -55,7 +55,9 @@ def get_statistics(controls_list, x_traj_list):
     print("Controls std:", controls_std)
     print("Trajectory mean:", x_traj_mean)
     print("Trajectory std:", x_traj_std)
-    return controls_std, x_traj_std
+    print("Controls range:", np.max(controls_array), np.min(controls_array))
+    print("Trajectory range:", np.max(x_traj_array), np.min(x_traj_array))
+    return controls_mean, controls_std, x_traj_mean, x_traj_std
 
 def save_models(model, denoising_model, num_dems, random_seed, Config):
     models_path = Config.get_model_path(num_dems, random_seed)

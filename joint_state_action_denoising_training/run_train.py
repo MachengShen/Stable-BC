@@ -6,7 +6,7 @@ if __name__ == "__main__":
 
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-    n_dems_list = [5, 10, 20] # , 40 , 60, 100]
+    n_dems_list = [5]#, 10, 20] # , 40 , 60, 100]
     random_seed_list = [ i for i in range(  5 )]
     
     Config.load_config_for_training("config.yaml")

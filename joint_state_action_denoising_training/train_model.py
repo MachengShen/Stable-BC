@@ -1,7 +1,7 @@
 import torch
+import torch.nn as nn
 import numpy as np
 from torch.utils.data import Dataset
-from models import MyModel
 import pickle
 import matplotlib.pyplot as plt
 import datetime
@@ -10,8 +10,8 @@ from tqdm import tqdm
 import os, sys
 from torch.utils.tensorboard import SummaryWriter
 import datetime
-from config import Config
 from dataset_utils import BCDataset, DenoisingDataset, StateImitationDataset, load_data
+from models import MLP
 
 # stable bc training, may require a dynamics model for each task
 def train_model(
@@ -192,11 +192,25 @@ def train_imitation_agent(num_dems, type: int, random_seed, Config):
         )
 
 
+def loss_func(y_true, y_pred, action_dim, state_dim):
+    assert y_true.shape[1] == action_dim + state_dim
+    assert y_pred.shape[1] == action_dim + state_dim
+    loss = nn.MSELoss(reduction="mean")
+    action_loss = loss(y_true[:, :action_dim], y_pred[:, :action_dim])
+    state_loss = loss(y_true[:, action_dim:], y_pred[:, action_dim:])
+    return action_loss, state_loss
+
 def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
     # Load data based on the task type
     controls_list, x_traj_list = load_data(Config)
-    controls_std, x_traj_std = get_statistics(controls_list, x_traj_list)
+    print("stats before normalization")
+    controls_mean, controls_std, x_traj_mean, x_traj_std = get_statistics(controls_list, x_traj_list)
 
+    controls_list = [((controls - controls_mean) / controls_std) for controls in controls_list]
+    x_traj_list = [((x_traj - x_traj_mean) / x_traj_std) for x_traj in x_traj_list]
+    print("stats after normalization")
+    _, controls_std, _, x_traj_std = get_statistics(controls_list, x_traj_list)
+    
     # randomly select num_dems indices
     seedEverything(random_seed)
     indices = np.random.choice(len(controls_list), num_dems, replace=False)
@@ -220,21 +234,13 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
 
     # Set up the models and optimizers with dynamic input/output dimensions
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = MyModel(
+    model = MLP(
         input_dim=state_dim, 
         output_dim=action_dim + state_dim, 
-        is_denoising_net=False, 
-        joint_action_state=True,
-        action_loss_weight=Config.ACTION_LOSS_WEIGHT_BC, 
-        state_loss_weight=Config.STATE_LOSS_WEIGHT_BC
     )
-    denoising_model = MyModel(
+    denoising_model = MLP(
         input_dim=action_dim + state_dim * 2, 
         output_dim=action_dim + state_dim, 
-        is_denoising_net=True, 
-        joint_action_state=True,
-        action_loss_weight=Config.ACTION_LOSS_WEIGHT_DENOISING, 
-        state_loss_weight=Config.STATE_LOSS_WEIGHT_DENOISING
     )
 
     model.to(device)
@@ -265,18 +271,17 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
         state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER
     )
 
-    BATCH_SIZE = Config.BATCH_SIZE
     train_bc_dataloader = torch.utils.data.DataLoader(
-        train_bc_dataset, batch_size=BATCH_SIZE, shuffle=True
+        train_bc_dataset, batch_size=Config.BATCH_SIZE, shuffle=True
     )
     train_denoising_dataloader = torch.utils.data.DataLoader(
-        train_denoising_dataset, batch_size=BATCH_SIZE, shuffle=True
+        train_denoising_dataset, batch_size=Config.BATCH_SIZE, shuffle=True
     )
     val_bc_dataloader = torch.utils.data.DataLoader(
-        val_bc_dataset, batch_size=BATCH_SIZE, shuffle=False
+        val_bc_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
     )
     val_denoising_dataloader = torch.utils.data.DataLoader(
-        val_denoising_dataset, batch_size=BATCH_SIZE, shuffle=False
+        val_denoising_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
     )
 
     # Set up TensorBoard
@@ -304,7 +309,8 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
 
             # Train behavior cloning model
             predicted_actions = model(states)
-            bc_loss = model.loss_func(predicted_actions, actions_next_states)
+            bc_action_loss, bc_state_loss = loss_func(actions_next_states, predicted_actions, action_dim, state_dim)
+            bc_loss = Config.ACTION_LOSS_WEIGHT_BC * bc_action_loss + Config.STATE_LOSS_WEIGHT_BC * bc_state_loss
 
             # Unpack denoising batch
             noisy_actions_next_states, clean_actions_next_states = denoising_batch
@@ -313,9 +319,10 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
 
             # Train denoising model
             denoised_actions_next_states = denoising_model(noisy_actions_next_states)
-            denoising_loss = model.loss_func(
-                denoised_actions_next_states, clean_actions_next_states
+            denoising_action_loss, denoising_state_loss = loss_func(
+                clean_actions_next_states, denoised_actions_next_states, action_dim, state_dim
             )
+            denoising_loss = Config.ACTION_LOSS_WEIGHT_DENOISING * denoising_action_loss + Config.STATE_LOSS_WEIGHT_DENOISING * denoising_state_loss
 
             # Update both models
             optimizer_model.zero_grad()
@@ -334,7 +341,11 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
 
             # Log training losses
             writer.add_scalar('Training/BC Loss', bc_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
+            writer.add_scalar('Training/BC Action Loss', bc_action_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
+            writer.add_scalar('Training/BC State Loss', bc_state_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
             writer.add_scalar('Training/Denoising Loss', denoising_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
+            writer.add_scalar('Training/Denoising Action Loss', denoising_action_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
+            writer.add_scalar('Training/Denoising State Loss', denoising_state_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
 
         # Validation
         model.eval()
@@ -349,14 +360,18 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
                 val_states = val_states.to(device)
                 val_actions_next_states = val_actions_next_states.to(device)
                 val_predicted_actions = model(val_states)
-                val_bc_loss += model.loss_func(val_predicted_actions, val_actions_next_states).item()
+                val_bc_action_loss, val_bc_state_loss = loss_func(val_predicted_actions, val_actions_next_states, action_dim, state_dim)
+                val_bc_loss = Config.ACTION_LOSS_WEIGHT_BC * val_bc_action_loss + Config.STATE_LOSS_WEIGHT_BC * val_bc_state_loss
+                val_bc_loss += val_bc_loss
 
                 # Validate denoising model
                 val_noisy_actions_next_states, val_clean_actions_next_states = val_denoising_batch
                 val_noisy_actions_next_states = val_noisy_actions_next_states.to(device)
                 val_clean_actions_next_states = val_clean_actions_next_states.to(device)
                 val_denoised_actions_next_states = denoising_model(val_noisy_actions_next_states)
-                val_denoising_loss += model.loss_func(val_denoised_actions_next_states, val_clean_actions_next_states).item()
+                val_denoising_action_loss, val_denoising_state_loss = loss_func(val_denoised_actions_next_states, val_clean_actions_next_states, action_dim, state_dim)
+                val_denoising_loss = Config.ACTION_LOSS_WEIGHT_DENOISING * val_denoising_action_loss + Config.STATE_LOSS_WEIGHT_DENOISING * val_denoising_state_loss
+                val_denoising_loss += val_denoising_loss
 
         val_bc_loss /= len(val_bc_dataloader)
         val_denoising_loss /= len(val_denoising_dataloader)
@@ -365,7 +380,11 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
 
         # Log validation losses
         writer.add_scalar('Validation/BC Loss', val_bc_loss, epoch)
+        writer.add_scalar('Validation/BC Action Loss', val_bc_action_loss, epoch)
+        writer.add_scalar('Validation/BC State Loss', val_bc_state_loss, epoch)
         writer.add_scalar('Validation/Denoising Loss', val_denoising_loss, epoch)
+        writer.add_scalar('Validation/Denoising Action Loss', val_denoising_action_loss, epoch)
+        writer.add_scalar('Validation/Denoising State Loss', val_denoising_state_loss, epoch)
 
     if save_ckpt:
         # Save the trained models

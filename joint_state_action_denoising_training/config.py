@@ -20,6 +20,10 @@ class Config:
         # Set dynamic attributes for training
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         cls.TIMESTAMP = timestamp
+        if cls.TASK_TYPE == "CCIL":
+            cls.BASE_LOG_PATH = os.path.join(cls.BASE_LOG_PATH, cls.CCIL_TASK_NAME)
+        else:
+            cls.BASE_LOG_PATH = os.path.join(cls.BASE_LOG_PATH, cls.TASK_TYPE)
         cls.BASE_LOG_PATH = os.path.join(cls.BASE_LOG_PATH, timestamp)
         
         # Save the config with the timestamp
