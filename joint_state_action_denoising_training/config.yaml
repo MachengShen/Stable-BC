@@ -1,0 +1,32 @@
+# General settings
+cuda_visible_devices: "0"
+
+# Task settings
+task_type: "sim-quadrotor"  # Options: "sim-quadrotor", "sim-intersection", "CCIL"
+ccil_data_dir: "CCIL-main/data"  # Only needed for CCIL tasks
+ccil_task_name: "door_opening"    # Only needed for CCIL tasks
+
+# Dataset settings
+num_dems: 100
+data_paths:
+  sim-quadrotor: "sim-quadrotor/data/data_0.pkl"
+  sim-intersection: "sim-intersection/data/data_0.pkl"
+  CCIL: "CCIL-main/data"
+
+# Training settings
+epoch: 300
+lr: 0.0004
+batch_size: 1024
+stability_loss_coef: 0.0001
+
+# Dataset settings
+action_noise_multiplier: 0.036
+state_noise_multiplier: 0.06 #0.041
+action_loss_weight_bc: 0.72
+action_loss_weight_denoising: 0.53
+
+# Logging paths
+base_log_paths:
+  sim-quadrotor: "sim-quadrotor/logs"
+  sim-intersection: "sim-intersection/logs"
+  CCIL: "CCIL-main/logs"
