@@ -11,7 +11,7 @@ import os, sys
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 from config import Config
-from dataset_utils import BCDataset, DenoisingDataset, StateImitationDataset
+from dataset_utils import BCDataset, DenoisingDataset, StateImitationDataset, load_data
 
 # stable bc training, may require a dynamics model for each task
 def train_model(
@@ -194,34 +194,7 @@ def train_imitation_agent(num_dems, type: int, random_seed, Config):
 
 def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
     # Load data based on the task type
-    if Config.TASK_TYPE == "sim-quadrotor":
-        data_dict = pickle.load(open("sim-quadrotor/data/data_0.pkl", "rb"))
-        controls_list = data_dict["controls_list"]
-        x_traj_list = data_dict["x_trajectories_list"]
-    
-    elif Config.TASK_TYPE == "sim-intersection":
-        data_dict = pickle.load(open("sim-intersection/data/data_0.pkl", "rb"))
-        controls_list = data_dict["controls_list"]
-        x_traj_list = data_dict["x_trajectories_list"]
-    
-    elif Config.TASK_TYPE == "CCIL":
-        # Load CCIL data using the read_data function
-        data = read_data(Config.CCIL_DATA_DIR)
-        task_data = data[Config.CCIL_TASK_NAME]
-        
-        # Convert CCIL format to our format
-        controls_list = []
-        x_traj_list = []
-        for traj in task_data:
-            # Convert observations and actions to numpy arrays if they're lists
-            observations = np.vstack(traj['observations']) if isinstance(traj['observations'], list) else traj['observations']
-            actions = np.vstack(traj['actions']) if isinstance(traj['actions'], list) else traj['actions']
-            
-            controls_list.append(actions)
-            x_traj_list.append(observations)
-    else:
-        raise ValueError(f"Unknown task type: {Config.TASK_TYPE}")
-
+    controls_list, x_traj_list = load_data(Config)
     controls_std, x_traj_std = get_statistics(controls_list, x_traj_list)
 
     # randomly select num_dems indices
@@ -264,5 +237,140 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
         state_loss_weight=Config.STATE_LOSS_WEIGHT_DENOISING
     )
 
-    # Rest of the function remains the same...
-    # ...
+    model.to(device)
+    denoising_model.to(device)
+
+    optimizer_model = torch.optim.Adam(model.parameters(), lr=Config.LR, weight_decay=1e-5)
+    optimizer_denoising = torch.optim.Adam(
+        denoising_model.parameters(), lr=Config.LR, weight_decay=1e-5
+    )
+
+    # Load and prepare datasets
+    train_bc_dataset = BCDataset(x_traj_list=train_x_traj_list, controls_list=train_controls_list)
+    train_denoising_dataset = DenoisingDataset(
+        x_traj_list=train_x_traj_list,
+        controls_list=train_controls_list,
+        action_noise_factor=controls_std,
+        state_noise_factor=x_traj_std,
+        action_noise_multiplier=Config.ACTION_NOISE_MULTIPLIER,
+        state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER
+    )
+    val_bc_dataset = BCDataset(x_traj_list=val_x_traj_list, controls_list=val_controls_list)
+    val_denoising_dataset = DenoisingDataset(
+        x_traj_list=val_x_traj_list,
+        controls_list=val_controls_list,
+        action_noise_factor=controls_std,
+        state_noise_factor=x_traj_std,
+        action_noise_multiplier=Config.ACTION_NOISE_MULTIPLIER,
+        state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER
+    )
+
+    BATCH_SIZE = Config.BATCH_SIZE
+    train_bc_dataloader = torch.utils.data.DataLoader(
+        train_bc_dataset, batch_size=BATCH_SIZE, shuffle=True
+    )
+    train_denoising_dataloader = torch.utils.data.DataLoader(
+        train_denoising_dataset, batch_size=BATCH_SIZE, shuffle=True
+    )
+    val_bc_dataloader = torch.utils.data.DataLoader(
+        val_bc_dataset, batch_size=BATCH_SIZE, shuffle=False
+    )
+    val_denoising_dataloader = torch.utils.data.DataLoader(
+        val_denoising_dataset, batch_size=BATCH_SIZE, shuffle=False
+    )
+
+    # Set up TensorBoard
+    writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed))
+
+    # Training loop
+    for epoch in range(Config.EPOCH):
+        model.train()
+        denoising_model.train()
+        total_bc_loss = 0
+        total_denoising_loss = 0
+
+        train_bar = tqdm(
+            zip(train_bc_dataloader, train_denoising_dataloader),
+            total=len(train_bc_dataloader),
+            position=0,
+            leave=True,
+        )
+
+        for batch_idx, (bc_batch, denoising_batch) in enumerate(train_bar):
+            # Unpack BC batch
+            states, actions_next_states = bc_batch
+            states = states.to(device)
+            actions_next_states = actions_next_states.to(device)
+
+            # Train behavior cloning model
+            predicted_actions = model(states)
+            bc_loss = model.loss_func(predicted_actions, actions_next_states)
+
+            # Unpack denoising batch
+            noisy_actions_next_states, clean_actions_next_states = denoising_batch
+            noisy_actions_next_states = noisy_actions_next_states.to(device)
+            clean_actions_next_states = clean_actions_next_states.to(device)
+
+            # Train denoising model
+            denoised_actions_next_states = denoising_model(noisy_actions_next_states)
+            denoising_loss = model.loss_func(
+                denoised_actions_next_states, clean_actions_next_states
+            )
+
+            # Update both models
+            optimizer_model.zero_grad()
+            optimizer_denoising.zero_grad()
+            bc_loss.backward()
+            denoising_loss.backward()
+            optimizer_model.step()
+            optimizer_denoising.step()
+
+            total_bc_loss += bc_loss.item()
+            total_denoising_loss += denoising_loss.item()
+
+            train_bar.set_description(
+                f"Epoch {epoch}, BC Loss: {total_bc_loss / (batch_idx + 1):.4f}, Denoising Loss: {total_denoising_loss / (batch_idx + 1):.4f}"
+            )
+
+            # Log training losses
+            writer.add_scalar('Training/BC Loss', bc_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
+            writer.add_scalar('Training/Denoising Loss', denoising_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
+
+        # Validation
+        model.eval()
+        denoising_model.eval()
+        val_bc_loss = 0
+        val_denoising_loss = 0
+
+        with torch.no_grad():
+            for val_bc_batch, val_denoising_batch in zip(val_bc_dataloader, val_denoising_dataloader):
+                # Validate BC model
+                val_states, val_actions_next_states = val_bc_batch
+                val_states = val_states.to(device)
+                val_actions_next_states = val_actions_next_states.to(device)
+                val_predicted_actions = model(val_states)
+                val_bc_loss += model.loss_func(val_predicted_actions, val_actions_next_states).item()
+
+                # Validate denoising model
+                val_noisy_actions_next_states, val_clean_actions_next_states = val_denoising_batch
+                val_noisy_actions_next_states = val_noisy_actions_next_states.to(device)
+                val_clean_actions_next_states = val_clean_actions_next_states.to(device)
+                val_denoised_actions_next_states = denoising_model(val_noisy_actions_next_states)
+                val_denoising_loss += model.loss_func(val_denoised_actions_next_states, val_clean_actions_next_states).item()
+
+        val_bc_loss /= len(val_bc_dataloader)
+        val_denoising_loss /= len(val_denoising_dataloader)
+
+        print(f"Epoch {epoch}, Validation BC Loss: {val_bc_loss:.4f}, Validation Denoising Loss: {val_denoising_loss:.4f}")
+
+        # Log validation losses
+        writer.add_scalar('Validation/BC Loss', val_bc_loss, epoch)
+        writer.add_scalar('Validation/Denoising Loss', val_denoising_loss, epoch)
+
+    if save_ckpt:
+        # Save the trained models
+        save_models(model, denoising_model, num_dems, random_seed, Config)
+
+    print("Joint training completed and models saved.")
+    writer.close()
+    return model, denoising_model
