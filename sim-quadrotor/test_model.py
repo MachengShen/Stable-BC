@@ -210,9 +210,17 @@ class ImitatingAgent:
             device
         )
         action_next_state = self.model(state_array)
-        # if np.random.rand() < 0.00005:
-        #     print("Warning: not using denoising model")
-        action_next_state = self.denoising_model(torch.cat([state_array, action_next_state]))
+        if np.random.rand() < 0.00005:
+            print("Warning: not using denoising model")
+        action_before_denoising = action_next_state[:3]
+        # action_next_state = self.denoising_model(torch.cat([state_array, action_next_state]))
+        action_after_denoising = action_next_state[:3]
+        # action_difference = torch.norm(action_after_denoising - action_before_denoising)
+        # print("Action difference: ", action_difference)
+        # action = action_next_state[:3].detach().clone()
+        # action[0] -= 9.81
+        # print("Action norm before denoising: ", torch.norm(action))
+        # print("Action norm after denoising: ", torch.norm(action))
         return action_next_state[:3]
 
 
@@ -221,6 +229,7 @@ def test_imitation_agent(
     type,
     random_seed,
     test_name,
+    rollout_seed,
     base_path=None,
     early_return=False,
     bc_model=None,
@@ -266,13 +275,13 @@ def test_imitation_agent(
             denoising_model_path = f"{base_path}/joint_training/{num_dems}dems/{random_seed}/joint_denoising_model.pt"
             bc_model = MyModel(input_dim=6, output_dim=9, is_denoising_net=False).to(device)
             denoising_model = MyModel(input_dim=15, output_dim=9, is_denoising_net=True).to(device)
-            bc_model.load_state_dict(torch.load(model_path, map_location=device))
-            denoising_model.load_state_dict(torch.load(denoising_model_path, map_location=device))
+            bc_model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+            denoising_model.load_state_dict(torch.load(denoising_model_path, map_location=device, weights_only=True))
         im_model = ImitatingAgent(model=bc_model, denoising_model=denoising_model)
 
     if test_name == "training_region":
         # sample initial conditions
-        seedEverything(random_seed)
+        seedEverything(rollout_seed)
         y_range = [0.5, 4.5]
         z_range = [0.5, 4.5]
         test_initial_conditions_array = sample_initial_conditions_array(

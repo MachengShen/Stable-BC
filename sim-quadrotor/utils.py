@@ -36,3 +36,6 @@ def sample_initial_conditions_array(y_range, z_range, num_of_sample):
     initial_vz = 0
     initial_conditions_arrray = np.random.uniform( (initial_x, y_range[0], z_range[0], initial_vx, initial_vy, initial_vz), (initial_x, y_range[1], z_range[1], initial_vx, initial_vy, initial_vz), (num_of_sample, 6) )
     return initial_conditions_arrray
+
+def to_tensor(array, device="cuda" if torch.cuda.is_available() else "cpu"):
+    return torch.tensor(array, dtype=torch.float32).to(device)
