@@ -5,13 +5,14 @@ from torch.utils.data import Dataset
 import pickle
 import matplotlib.pyplot as plt
 import datetime
-from utils import seedEverything, get_statistics, save_models
+from utils import seedEverything, get_statistics, save_models, save_normalization_stats
 from tqdm import tqdm
 import os, sys
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 from dataset_utils import BCDataset, DenoisingDataset, StateImitationDataset, load_data
 from models import MLP
+from diffusion_model import DiffusionPolicy
 
 # stable bc training, may require a dynamics model for each task
 def train_model(
@@ -205,9 +206,10 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
     controls_list, x_traj_list = load_data(Config)
     print("stats before normalization")
     controls_mean, controls_std, x_traj_mean, x_traj_std = get_statistics(controls_list, x_traj_list)
+    save_normalization_stats(controls_mean, controls_std, x_traj_mean, x_traj_std, num_dems, random_seed, Config)
 
-    controls_list = [((controls - controls_mean) / controls_std) for controls in controls_list]
-    x_traj_list = [((x_traj - x_traj_mean) / x_traj_std) for x_traj in x_traj_list]
+    controls_list = [((controls - controls_mean) / (controls_std + 1e-8)) for controls in controls_list]
+    x_traj_list = [((x_traj - x_traj_mean) / (x_traj_std + 1e-8)) for x_traj in x_traj_list]
     print("stats after normalization")
     _, controls_std, _, x_traj_std = get_statistics(controls_list, x_traj_list)
     
@@ -393,3 +395,212 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
     print("Joint training completed and models saved.")
     writer.close()
     return model, denoising_model
+
+def train_baseline_bc(num_dems, random_seed, Config):
+    """Train a baseline BC model that only maps states to actions"""
+    # Load and normalize data
+    controls_list, x_traj_list = load_data(Config)
+    print("stats before normalization")
+    controls_mean, controls_std, x_traj_mean, x_traj_std = get_statistics(controls_list, x_traj_list)
+    save_normalization_stats(controls_mean, controls_std, x_traj_mean, x_traj_std, num_dems, random_seed, Config)
+
+    controls_list = [((controls - controls_mean) / (controls_std + 1e-8)) for controls in controls_list]
+    x_traj_list = [((x_traj - x_traj_mean) / (x_traj_std + 1e-8)) for x_traj in x_traj_list]
+    
+    # Randomly select demonstrations
+    seedEverything(random_seed)
+    indices = np.random.choice(len(controls_list), num_dems, replace=False)
+    controls_list = [controls_list[i] for i in indices]
+    x_traj_list = [x_traj_list[i] for i in indices]
+
+    # Get dimensions
+    state_dim = len(x_traj_list[0][0])
+    action_dim = len(controls_list[0][0])
+
+    # Split data
+    split_factor = 0.8
+    train_size = int(len(controls_list) * split_factor)
+    
+    train_controls_list = controls_list[:train_size]
+    train_x_traj_list = x_traj_list[:train_size]
+    val_controls_list = controls_list[train_size:]
+    val_x_traj_list = x_traj_list[train_size:]
+
+    # Create datasets
+    train_dataset = BCDataset(x_traj_list=train_x_traj_list, controls_list=train_controls_list, action_only=True)
+    val_dataset = BCDataset(x_traj_list=val_x_traj_list, controls_list=val_controls_list, action_only=True)
+
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True
+    )
+    val_dataloader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
+    )
+
+    # Initialize model and optimizer
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = MLP(input_dim=state_dim, output_dim=action_dim).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=Config.LR)
+    loss_fn = nn.MSELoss()
+
+    # Set up tensorboard
+    writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + "_baseline")
+
+    # Training loop
+    for epoch in range(Config.EPOCH):
+        model.train()
+        total_train_loss = 0
+        
+        train_bar = tqdm(train_dataloader, position=0, leave=True)
+        for batch_idx, (states, actions) in enumerate(train_bar):
+            states = states.to(device)
+            actions = actions.to(device)
+            
+            pred_actions = model(states)
+            loss = loss_fn(actions, pred_actions)
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            total_train_loss += loss.item()
+            train_bar.set_description(
+                f"Epoch {epoch}, Train Loss: {total_train_loss / (batch_idx + 1):.4f}"
+            )
+            
+            writer.add_scalar('Training/Loss', loss.item(), 
+                            epoch * len(train_dataloader) + batch_idx)
+
+        # Validation
+        model.eval()
+        total_val_loss = 0
+        with torch.no_grad():
+            for states, actions in val_dataloader:
+                states = states.to(device)
+                actions = actions.to(device)
+                pred_actions = model(states)
+                loss = loss_fn(actions, pred_actions)
+                total_val_loss += loss.item()
+        
+        avg_val_loss = total_val_loss / len(val_dataloader)
+        writer.add_scalar('Validation/Loss', avg_val_loss, epoch)
+        print(f"Epoch {epoch}, Validation Loss: {avg_val_loss:.4f}")
+
+    # Save model
+    save_path = Config.get_model_path(num_dems, random_seed)
+    os.makedirs(save_path, exist_ok=True)
+    torch.save(model.state_dict(), os.path.join(save_path, "baseline_bc_model.pt"))
+    
+    writer.close()
+    return model
+
+
+def train_diffusion_policy(num_dems, random_seed, Config):
+    """Train a diffusion policy that predicts joint [action, next_state]"""
+    # Load and normalize data
+    controls_list, x_traj_list = load_data(Config)
+    print("stats before normalization")
+    controls_mean, controls_std, x_traj_mean, x_traj_std = get_statistics(controls_list, x_traj_list)
+    save_normalization_stats(controls_mean, controls_std, x_traj_mean, x_traj_std, num_dems, random_seed, Config)
+
+    controls_list = [((controls - controls_mean) / (controls_std + 1e-8)) for controls in controls_list]
+    x_traj_list = [((x_traj - x_traj_mean) / (x_traj_std + 1e-8)) for x_traj in x_traj_list]
+    
+    # Randomly select demonstrations
+    seedEverything(random_seed)
+    indices = np.random.choice(len(controls_list), num_dems, replace=False)
+    controls_list = [controls_list[i] for i in indices]
+    x_traj_list = [x_traj_list[i] for i in indices]
+
+    # Get dimensions
+    state_dim = len(x_traj_list[0][0])
+    action_dim = len(controls_list[0][0])
+
+    # Split data into training and validation
+    split_factor = 0.8
+    train_size = int(len(controls_list) * split_factor)
+    
+    train_controls_list = controls_list[:train_size]
+    train_x_traj_list = x_traj_list[:train_size]
+    val_controls_list = controls_list[train_size:]
+    val_x_traj_list = x_traj_list[train_size:]
+
+    # Create datasets
+    train_dataset = BCDataset(x_traj_list=train_x_traj_list, controls_list=train_controls_list)
+    val_dataset = BCDataset(x_traj_list=val_x_traj_list, controls_list=val_controls_list)
+
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True
+    )
+    val_dataloader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
+    )
+
+    # Initialize diffusion policy with config parameters
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    diffusion = DiffusionPolicy(
+        state_dim=state_dim,
+        action_dim=action_dim,
+        device=device,
+        n_steps=Config.DIFFUSION_N_STEPS,
+        beta_min=Config.DIFFUSION_BETA_MIN,
+        beta_max=Config.DIFFUSION_BETA_MAX,
+    )
+    
+    optimizer = torch.optim.Adam(diffusion.score_model.parameters(), lr=Config.LR)
+    
+    # Set up tensorboard
+    writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + "_diffusion")
+
+    # Training loop with diffusion-specific epoch count
+    for epoch in range(Config.DIFFUSION_EPOCH):
+        diffusion.score_model.train()
+        total_train_loss = 0
+        
+        train_bar = tqdm(train_dataloader, position=0, leave=True)
+        for batch_idx, (states, actions_next_states) in enumerate(train_bar):
+            states = states.to(device)
+            actions_next_states = actions_next_states.to(device)
+            
+            loss = diffusion.train_step(actions_next_states, states, optimizer)
+            total_train_loss += loss
+            
+            train_bar.set_description(
+                f"Epoch {epoch}, Train Loss: {total_train_loss / (batch_idx + 1):.4f}"
+            )
+            
+            writer.add_scalar('Training/Loss', loss, 
+                            epoch * len(train_dataloader) + batch_idx)
+
+        avg_train_loss = total_train_loss / len(train_dataloader)
+        print(f"Epoch {epoch}, Average Train Loss: {avg_train_loss:.4f}")
+
+        # Validation loop
+        diffusion.score_model.eval()
+        total_val_loss = 0
+        with torch.no_grad():
+            for states, actions_next_states in val_dataloader:
+                states = states.to(device)
+                actions_next_states = actions_next_states.to(device)
+                
+                # Sample noise and add to data
+                x_t, eps = diffusion.q_sample(actions_next_states, torch.randint(0, diffusion.n_steps, (actions_next_states.size(0),), device=device))
+                
+                # Predict noise
+                eps_pred = diffusion.score_model(x_t, states, torch.randint(0, diffusion.n_steps, (actions_next_states.size(0),), device=device))
+                
+                # Loss is MSE between true and predicted noise
+                val_loss = nn.MSELoss()(eps_pred, eps)
+                total_val_loss += val_loss.item()
+
+        avg_val_loss = total_val_loss / len(val_dataloader)
+        writer.add_scalar('Validation/Loss', avg_val_loss, epoch)
+        print(f"Epoch {epoch}, Average Validation Loss: {avg_val_loss:.4f}")
+
+    # Save model
+    save_path = Config.get_model_path(num_dems, random_seed)
+    os.makedirs(save_path, exist_ok=True)
+    torch.save(diffusion.score_model.state_dict(), os.path.join(save_path, "diffusion_model.pt"))
+    
+    writer.close()
+    return diffusion 

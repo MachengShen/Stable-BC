@@ -20,15 +20,22 @@ cuda_visible_devices: "0"
 # Task settings
 task_type: "CCIL"  # Options: "sim-quadrotor", "sim-intersection", "CCIL"
 ccil_data_dir: "../CCIL-main/data"  # Only needed for CCIL tasks
-ccil_task_name: "pendulum_cont_100"    # Only needed for CCIL tasks
+ccil_task_name: 'metaworld-drawer-close-v2'    # Only needed for CCIL tasks
 
 # Dataset settings
-num_dems: 100
+num_dems: 5
 
 # Training settings
-epoch: 300
+epoch: 300  # For BC and joint training
+diffusion_epoch: 3000  # Separate epoch setting for diffusion model
 lr: 0.0004
 batch_size: 1024
+
+# Diffusion settings
+diffusion_n_steps: 50
+diffusion_beta_min: 0.0001
+diffusion_beta_max: 0.02
+
 # stable bc hparam
 stability_loss_coef: 0.0001
 
@@ -40,3 +47,8 @@ action_loss_weight_denoising: 0.53
 
 # Logging paths
 base_log_path: "/cephfs/cjyai/joint_denoising_bc/"
+
+# Evaluation settings
+eval:
+  noise_levels: [0.0, 0.1, 0.2, 0.3]
+  num_episodes: 100

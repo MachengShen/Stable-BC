@@ -20,9 +20,10 @@ class StateImitationDataset(Dataset):
 
 
 class BCDataset(Dataset):
-    def __init__(self, x_traj_list, controls_list):
+    def __init__(self, x_traj_list, controls_list, action_only=False):
         self.x_traj_list = x_traj_list
         self.controls_list = controls_list
+        self.action_only = action_only
 
     def __len__(self):
         return sum(len(traj) - 1 for traj in self.x_traj_list)
@@ -39,7 +40,10 @@ class BCDataset(Dataset):
         x_t_plus_1 = self.x_traj_list[traj_idx][idx + 1]
 
         input_tensor = to_tensor(x_t)
-        output_tensor = to_tensor(np.concatenate([a_t, x_t_plus_1]))
+        if self.action_only:
+            output_tensor = to_tensor(a_t)
+        else:
+            output_tensor = to_tensor(np.concatenate([a_t, x_t_plus_1]))
 
         return input_tensor, output_tensor
 

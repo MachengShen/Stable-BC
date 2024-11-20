@@ -42,9 +42,6 @@ class MLP(nn.Module):
             state_tensor = torch.tensor(state_tensor, dtype=torch.float32)
         self.eval()
         with torch.no_grad():
-            # for the control
-            # multiply by the control bound
-            # add A_G form the output 0
             state_tensor = state_tensor.to(device)
             action = self.forward(state_tensor)
         return action.squeeze().detach()

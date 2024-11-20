@@ -59,6 +59,23 @@ def get_statistics(controls_list, x_traj_list):
     print("Trajectory range:", np.max(x_traj_array), np.min(x_traj_array))
     return controls_mean, controls_std, x_traj_mean, x_traj_std
 
+
+def save_normalization_stats(controls_mean, controls_std, x_traj_mean, x_traj_std, num_dems, random_seed, Config):
+        # Save normalization statistics to the log directory
+    stats_path = Config.get_model_path(num_dems, random_seed)
+    os.makedirs(stats_path, exist_ok=True)
+    
+    stats_dict = {
+        'controls_mean': controls_mean,
+        'controls_std': controls_std, 
+        'x_traj_mean': x_traj_mean,
+        'x_traj_std': x_traj_std
+    }
+    
+    with open(os.path.join(stats_path, 'normalization_stats.pkl'), 'wb') as f:
+        pickle.dump(stats_dict, f)
+        
+        
 def save_models(model, denoising_model, num_dems, random_seed, Config):
     models_path = Config.get_model_path(num_dems, random_seed)
     if not os.path.exists(models_path):
