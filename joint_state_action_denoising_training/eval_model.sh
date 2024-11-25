@@ -1,4 +1,4 @@
-LOG_STAMP='hopper-expert-v2_25/20241120-202305/'
+LOG_STAMP='walker2d-expert-v2_20/20241120-221224/'
 SEED='seed42'
 CONFIG_PATH="/cephfs/cjyai/joint_denoising_bc/${LOG_STAMP}config.yaml"
 CKPT_DIR="/cephfs/cjyai/joint_denoising_bc/${LOG_STAMP}results/joint_training/5dems/${SEED}/"

@@ -6,8 +6,7 @@ import random
 import os
 import torch
 import math
-
-
+from ccil_utils import evaluate_on_environment
 
 
 # taken from https://www.kaggle.com/code/rhythmcam/random-seed-everything
@@ -40,7 +39,7 @@ def sample_initial_conditions_array(y_range, z_range, num_of_sample):
 def to_tensor(array, device="cuda" if torch.cuda.is_available() else "cpu"):
     return torch.tensor(array, dtype=torch.float32).to(device)
 
-def get_statistics(controls_list, x_traj_list):
+def get_statistics(controls_list, x_traj_list, is_delta=False):
     # Concatenate the controls and trajectories
     controls_array = np.concatenate(controls_list)
     x_traj_array = np.concatenate([np.stack(traj) for traj in x_traj_list])
@@ -53,10 +52,10 @@ def get_statistics(controls_list, x_traj_list):
 
     print("Controls mean:", controls_mean)
     print("Controls std:", controls_std)
-    print("Trajectory mean:", x_traj_mean)
-    print("Trajectory std:", x_traj_std)
+    print("{'Delta ' if is_delta else ''}Trajectory mean:", x_traj_mean)
+    print("{'Delta ' if is_delta else ''}Trajectory std:", x_traj_std)
     print("Controls range:", np.max(controls_array), np.min(controls_array))
-    print("Trajectory range:", np.max(x_traj_array), np.min(x_traj_array))
+    print("{'Delta ' if is_delta else ''}Trajectory range:", np.max(x_traj_array), np.min(x_traj_array))
     return controls_mean, controls_std, x_traj_mean, x_traj_std
 
 
@@ -83,3 +82,25 @@ def save_models(model, denoising_model, num_dems, random_seed, Config):
 
     torch.save(model.state_dict(), f"{models_path}/joint_bc_model.pt")
     torch.save(denoising_model.state_dict(), f"{models_path}/joint_denoising_model.pt")
+
+def evaluate_model(agent, env, meta_env, device, num_episodes=10, noise_levels=[0.0]):
+    """Helper function to evaluate a model during training"""
+    results = {}
+    
+    for noise in noise_levels:
+        rewards, success = evaluate_on_environment(
+            env,
+            agent,
+            n_trials=num_episodes,
+            metaworld=meta_env,
+            sensor_noise_size=noise,
+            actuator_noise_size=noise
+        )
+        
+        results[noise] = {
+            'mean_reward': np.mean(rewards),
+            'std_reward': np.std(rewards) / np.sqrt(num_episodes),
+            'success_rate': success / num_episodes
+        }
+    
+    return results

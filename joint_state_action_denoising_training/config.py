@@ -7,16 +7,16 @@ CCIL_TASK_ENV_MAP = {
     "walker2d-expert-v2_20": "walker2d-expert-v2",
     "hopper-expert-v2_25": "hopper-expert-v2",
     "ant-expert-v2_10": "ant-expert-v2",
-    "f1": "f110_gym:f110-v0",
     "pendulum_disc_500": "PendulumSwingupDisc-v0",
     "metaworld-button-press-top-down-v2": "button-press-topdown-v2",
-    "circle_50": "circle-aviary-v0",
-    "hover_5": "hover-aviary-v0",
     "halfcheetah-expert-v2_50": "halfcheetah-expert-v2",
     "metaworld-coffee-push-v2_50": "coffee-push-v2",
     "metaworld-coffee-pull-v2_50": "coffee-pull-v2",
-    "flythrugate_50": "flythrugate-aviary-v0",
-    "metaworld-drawer-close-v2": "drawer-close-v2"
+    "metaworld-drawer-close-v2": "drawer-close-v2",
+    # "flythrugate_50": "flythrugate-aviary-v0",
+    # "circle_50": "circle-aviary-v0",
+    # "hover_5": "hover-aviary-v0",
+    # "f1": "f110_gym:f110-v0",
 }
 
 class Config:

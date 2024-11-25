@@ -26,6 +26,22 @@ def update_config(base_config_path, task_name, output_path):
     config['task_type'] = 'CCIL'
     config['ccil_task_name'] = task_name
     
+    # Set different epoch numbers based on environment type
+    mujoco_envs = [
+        'walker2d-expert-v2_20',
+        'hopper-expert-v2_25',
+        'ant-expert-v2_10',
+        'halfcheetah-expert-v2_50'
+    ]
+    
+    # Set epochs based on environment type
+    if task_name in mujoco_envs:
+        config['epoch'] = 5000  # More epochs for MuJoCo environments
+        config['diffusion_epoch'] = 10000  # Even more epochs for diffusion on MuJoCo
+    else:
+        config['epoch'] = 1000  # Default epochs for other environments
+        config['diffusion_epoch'] = 5000  # Default epochs for diffusion
+    
     # Create task-specific directory
     os.makedirs(output_path, exist_ok=True)
     config_path = os.path.join(output_path, 'config.yaml')
@@ -57,8 +73,12 @@ def train_model(config_path, seed, timestamp):
         print("Training joint state-action model...")
         train_model_joint(Config.NUM_DEMS, seed, Config)
         
-        print("Training diffusion policy...")
-        train_diffusion_policy(Config.NUM_DEMS, seed, Config)
+        print("Training joint state-action model with delta state...")
+        train_model_joint(Config.NUM_DEMS, seed, Config, predict_state_delta=True)
+        
+        # print("Training diffusion policy...")
+        # train_diffusion_policy(Config.NUM_DEMS, seed, Config)
+        
         return True
     except Exception as e:
         print(f"Training failed with error: {str(e)}")

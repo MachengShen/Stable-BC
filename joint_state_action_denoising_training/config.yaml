@@ -26,29 +26,29 @@ ccil_task_name: 'metaworld-drawer-close-v2'    # Only needed for CCIL tasks
 num_dems: 5
 
 # Training settings
-epoch: 300  # For BC and joint training
-diffusion_epoch: 3000  # Separate epoch setting for diffusion model
+epoch: 1000
+diffusion_epoch: 5000
 lr: 0.0004
+weight_decay: 1.0e-5
 batch_size: 1024
 
 # Diffusion settings
 diffusion_n_steps: 50
-diffusion_beta_min: 0.0001
-diffusion_beta_max: 0.02
 
 # stable bc hparam
 stability_loss_coef: 0.0001
 
 # Dataset settings
-action_noise_multiplier: 0.036
-state_noise_multiplier: 0.06 #0.041
+action_noise_multiplier: 0.005 # 0.036
+state_noise_multiplier: 0.005 # 0.06 #0.041
 action_loss_weight_bc: 0.72
 action_loss_weight_denoising: 0.53
 
 # Logging paths
-base_log_path: "/cephfs/cjyai/joint_denoising_bc/"
+base_log_path: "/cephfs/cjyai/joint_denoising_bc_new/"
 
-# Evaluation settings
-eval:
-  noise_levels: [0.0, 0.1, 0.2, 0.3]
-  num_episodes: 100
+
+# Evaluation settings during training
+eval_interval_factor: 0.1  # Evaluate every eval_interval_factor * epoch epochs
+eval_episodes: 10   # Number of episodes per evaluation
+eval_noise_levels: [0.0]  # Noise levels to evaluate on

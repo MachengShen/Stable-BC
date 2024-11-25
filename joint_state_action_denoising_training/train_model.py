@@ -5,14 +5,16 @@ from torch.utils.data import Dataset
 import pickle
 import matplotlib.pyplot as plt
 import datetime
-from utils import seedEverything, get_statistics, save_models, save_normalization_stats
+from utils import seedEverything, get_statistics, save_models, save_normalization_stats, evaluate_model
 from tqdm import tqdm
 import os, sys
 from torch.utils.tensorboard import SummaryWriter
 import datetime
-from dataset_utils import BCDataset, DenoisingDataset, StateImitationDataset, load_data
+from dataset_utils import BCDataset, DenoisingDataset, StateImitationDataset, load_data, get_delta_x_traj_list
 from models import MLP
 from diffusion_model import DiffusionPolicy
+from policy_agents import JointStateActionAgent, BaselineBCAgent, RandomAgent, DiffusionPolicyAgent
+from ccil_utils import load_env
 
 # stable bc training, may require a dynamics model for each task
 def train_model(
@@ -201,17 +203,24 @@ def loss_func(y_true, y_pred, action_dim, state_dim):
     state_loss = loss(y_true[:, action_dim:], y_pred[:, action_dim:])
     return action_loss, state_loss
 
-def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
+
+def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_state_delta=False):
     # Load data based on the task type
     controls_list, x_traj_list = load_data(Config)
+    
+    # Get normalized state deltas if needed
+    if predict_state_delta:
+        delta_x_traj_list = get_delta_x_traj_list(x_traj_list)
+        x_traj_list = delta_x_traj_list
+    
     print("stats before normalization")
-    controls_mean, controls_std, x_traj_mean, x_traj_std = get_statistics(controls_list, x_traj_list)
+    controls_mean, controls_std, x_traj_mean, x_traj_std = get_statistics(controls_list, x_traj_list, is_delta=predict_state_delta)
     save_normalization_stats(controls_mean, controls_std, x_traj_mean, x_traj_std, num_dems, random_seed, Config)
 
     controls_list = [((controls - controls_mean) / (controls_std + 1e-8)) for controls in controls_list]
     x_traj_list = [((x_traj - x_traj_mean) / (x_traj_std + 1e-8)) for x_traj in x_traj_list]
     print("stats after normalization")
-    _, controls_std, _, x_traj_std = get_statistics(controls_list, x_traj_list)
+    _, controls_std, _, x_traj_std = get_statistics(controls_list, x_traj_list, is_delta=predict_state_delta)
     
     # randomly select num_dems indices
     seedEverything(random_seed)
@@ -248,9 +257,11 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
     model.to(device)
     denoising_model.to(device)
 
-    optimizer_model = torch.optim.Adam(model.parameters(), lr=Config.LR, weight_decay=1e-5)
+    optimizer_model = torch.optim.Adam(model.parameters(), 
+                                     lr=Config.LR, 
+                                     weight_decay=Config.WEIGHT_DECAY)
     optimizer_denoising = torch.optim.Adam(
-        denoising_model.parameters(), lr=Config.LR, weight_decay=1e-5
+        denoising_model.parameters(), lr=Config.LR, weight_decay=Config.WEIGHT_DECAY
     )
 
     # Load and prepare datasets
@@ -286,9 +297,14 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
         val_denoising_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
     )
 
-    # Set up TensorBoard
-    writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed))
+    # Set up TensorBoard with delta state notation
+    state_type = "delta_state" if predict_state_delta else "next_state"
+    writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + f"_{state_type}")
 
+    # Initialize environment for evaluation
+    env, meta_env = load_env(Config)
+    env.seed(random_seed)
+    
     # Training loop
     for epoch in range(Config.EPOCH):
         model.train()
@@ -341,13 +357,11 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
                 f"Epoch {epoch}, BC Loss: {total_bc_loss / (batch_idx + 1):.4f}, Denoising Loss: {total_denoising_loss / (batch_idx + 1):.4f}"
             )
 
-            # Log training losses
-            writer.add_scalar('Training/BC Loss', bc_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
-            writer.add_scalar('Training/BC Action Loss', bc_action_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
-            writer.add_scalar('Training/BC State Loss', bc_state_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
-            writer.add_scalar('Training/Denoising Loss', denoising_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
-            writer.add_scalar('Training/Denoising Action Loss', denoising_action_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
-            writer.add_scalar('Training/Denoising State Loss', denoising_state_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
+            # Log training losses with clear state type notation
+            writer.add_scalar(f'Training/BC_{state_type}_Loss', bc_state_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
+            writer.add_scalar('Training/BC_Action_Loss', bc_action_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
+            writer.add_scalar(f'Training/Denoising_{state_type}_Loss', denoising_state_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
+            writer.add_scalar('Training/Denoising_Action_Loss', denoising_action_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
 
         # Validation
         model.eval()
@@ -380,13 +394,32 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True):
 
         print(f"Epoch {epoch}, Validation BC Loss: {val_bc_loss:.4f}, Validation Denoising Loss: {val_denoising_loss:.4f}")
 
-        # Log validation losses
-        writer.add_scalar('Validation/BC Loss', val_bc_loss, epoch)
-        writer.add_scalar('Validation/BC Action Loss', val_bc_action_loss, epoch)
-        writer.add_scalar('Validation/BC State Loss', val_bc_state_loss, epoch)
-        writer.add_scalar('Validation/Denoising Loss', val_denoising_loss, epoch)
-        writer.add_scalar('Validation/Denoising Action Loss', val_denoising_action_loss, epoch)
-        writer.add_scalar('Validation/Denoising State Loss', val_denoising_state_loss, epoch)
+        # Log validation losses with clear state type notation
+        writer.add_scalar(f'Validation/BC_{state_type}_Loss', val_bc_state_loss, epoch)
+        writer.add_scalar('Validation/BC_Action_Loss', val_bc_action_loss, epoch)
+        writer.add_scalar(f'Validation/Denoising_{state_type}_Loss', val_denoising_state_loss, epoch)
+        writer.add_scalar('Validation/Denoising_Action_Loss', val_denoising_action_loss, epoch)
+
+        # Periodic evaluation (every 100 epochs or as specified in config)
+        if epoch % (Config.EVAL_INTERVAL_FACTOR * Config.EPOCH) == 0:
+            # Evaluate BC model
+            bc_agent = JointStateActionAgent(
+                model, None, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
+            )
+            bc_results = evaluate_model(bc_agent, env, meta_env, device)
+            
+            # Evaluate denoising model
+            denoising_agent = JointStateActionAgent(
+                model, denoising_model, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
+            )
+            denoising_results = evaluate_model(denoising_agent, env, meta_env, device)
+            
+            # Log evaluation results with state type notation
+            for noise in bc_results:
+                writer.add_scalar(f'Eval/BC_{state_type}_Mean_Reward_{noise}', bc_results[noise]['mean_reward'], epoch)
+                writer.add_scalar(f'Eval/BC_{state_type}_Success_Rate_{noise}', bc_results[noise]['success_rate'], epoch)
+                writer.add_scalar(f'Eval/Denoising_{state_type}_Mean_Reward_{noise}', denoising_results[noise]['mean_reward'], epoch)
+                writer.add_scalar(f'Eval/Denoising_{state_type}_Success_Rate_{noise}', denoising_results[noise]['success_rate'], epoch)
 
     if save_ckpt:
         # Save the trained models
@@ -437,15 +470,21 @@ def train_baseline_bc(num_dems, random_seed, Config):
         val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
     )
 
-    # Initialize model and optimizer
+    # Initialize model and optimizer with weight decay
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = MLP(input_dim=state_dim, output_dim=action_dim).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=Config.LR)
+    optimizer = torch.optim.Adam(model.parameters(), 
+                               lr=Config.LR, 
+                               weight_decay=Config.WEIGHT_DECAY)
     loss_fn = nn.MSELoss()
 
     # Set up tensorboard
     writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + "_baseline")
 
+    # Initialize environment for evaluation
+    env, meta_env = load_env(Config)
+    env.seed(random_seed)
+    
     # Training loop
     for epoch in range(Config.EPOCH):
         model.train()
@@ -485,6 +524,18 @@ def train_baseline_bc(num_dems, random_seed, Config):
         avg_val_loss = total_val_loss / len(val_dataloader)
         writer.add_scalar('Validation/Loss', avg_val_loss, epoch)
         print(f"Epoch {epoch}, Validation Loss: {avg_val_loss:.4f}")
+
+        # Periodic evaluation
+        if epoch % (Config.EVAL_INTERVAL_FACTOR * Config.EPOCH) == 0:
+            baseline_agent = BaselineBCAgent(
+                model, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
+            )
+            results = evaluate_model(baseline_agent, env, meta_env, device)
+            
+            # Log evaluation results
+            for noise in results:
+                writer.add_scalar(f'Eval/Mean_Reward_{noise}', results[noise]['mean_reward'], epoch)
+                writer.add_scalar(f'Eval/Success_Rate_{noise}', results[noise]['success_rate'], epoch)
 
     # Save model
     save_path = Config.get_model_path(num_dems, random_seed)
@@ -536,22 +587,26 @@ def train_diffusion_policy(num_dems, random_seed, Config):
         val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
     )
 
-    # Initialize diffusion policy with config parameters
+    # Initialize diffusion policy and optimizer with weight decay
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = DiffusionPolicy(
         state_dim=state_dim,
         action_dim=action_dim,
         device=device,
         n_steps=Config.DIFFUSION_N_STEPS,
-        beta_min=Config.DIFFUSION_BETA_MIN,
-        beta_max=Config.DIFFUSION_BETA_MAX,
     )
     
-    optimizer = torch.optim.Adam(diffusion.score_model.parameters(), lr=Config.LR)
+    optimizer = torch.optim.Adam(diffusion.score_model.parameters(), 
+                               lr=Config.LR, 
+                               weight_decay=Config.WEIGHT_DECAY)
     
     # Set up tensorboard
     writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + "_diffusion")
 
+    # Initialize environment for evaluation
+    env, meta_env = load_env(Config)
+    env.seed(random_seed)
+    
     # Training loop with diffusion-specific epoch count
     for epoch in range(Config.DIFFUSION_EPOCH):
         diffusion.score_model.train()
@@ -596,6 +651,18 @@ def train_diffusion_policy(num_dems, random_seed, Config):
         avg_val_loss = total_val_loss / len(val_dataloader)
         writer.add_scalar('Validation/Loss', avg_val_loss, epoch)
         print(f"Epoch {epoch}, Average Validation Loss: {avg_val_loss:.4f}")
+
+        # Periodic evaluation
+        if epoch % (Config.EVAL_INTERVAL_FACTOR * Config.DIFFUSION_EPOCH) == 0:
+            diffusion_agent = DiffusionPolicyAgent(
+                diffusion, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
+            )
+            results = evaluate_model(diffusion_agent, env, meta_env, device)
+            
+            # Log evaluation results
+            for noise in results:
+                writer.add_scalar(f'Eval/Mean_Reward_{noise}', results[noise]['mean_reward'], epoch)
+                writer.add_scalar(f'Eval/Success_Rate_{noise}', results[noise]['success_rate'], epoch)
 
     # Save model
     save_path = Config.get_model_path(num_dems, random_seed)

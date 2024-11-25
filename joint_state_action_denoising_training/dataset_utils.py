@@ -146,3 +146,17 @@ def load_data(Config):
     else:
         raise ValueError(f"Unknown task type: {Config.TASK_TYPE}")
     return controls_list, x_traj_list
+
+def get_delta_x_traj_list(x_traj_list):
+    """
+    Compute state deltas from trajectory list and return statistics
+    """
+    delta_x_traj_list = []
+    for traj in x_traj_list:
+        # Convert to numpy array if it's a list
+        traj = np.array(traj)
+        # Compute deltas: x_{t+1} - x_t
+        delta_traj = traj[1:] - traj[:-1]
+        delta_x_traj_list.append(delta_traj)
+    
+    return delta_x_traj_list
