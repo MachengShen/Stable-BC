@@ -8,11 +8,12 @@ from datetime import datetime
 import time
 from train_model import train_model_joint, train_baseline_bc, train_diffusion_policy
 from utils import seedEverything
+# import torch.multiprocessing as mp
 
 def construct_parser():
     parser = argparse.ArgumentParser(description='Sweep through CCIL environments')
     parser.add_argument('--base_config', type=str, default='config.yaml', help='Base config file path')
-    parser.add_argument('--seeds', type=int, nargs='+', default=[42], help='Random seeds to use')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[0, 1], help='Random seeds to use')
     parser.add_argument('--mode', type=str, choices=['train', 'eval', 'both'], default='both', help='Mode to run')
     parser.add_argument('--task', type=str, default=None, help='Specific task to run (optional)')
     return parser
@@ -33,6 +34,12 @@ def update_config(base_config_path, task_name, output_path):
         'ant-expert-v2_10',
         'halfcheetah-expert-v2_50'
     ]
+    # env_epochs = {
+    #     'walker2d-expert-v2_20': 5000,
+    #     'hopper-expert-v2_25': 5000,
+    #     'ant-expert-v2_10': 5000,
+    #     'halfcheetah-expert-v2_50': 5000
+    # }
     
     # Set epochs based on environment type
     if task_name in mujoco_envs:
@@ -42,6 +49,9 @@ def update_config(base_config_path, task_name, output_path):
         config['epoch'] = 1000  # Default epochs for other environments
         config['diffusion_epoch'] = 5000  # Default epochs for diffusion
     
+    # Scale epochs based on number of demos (size of dataset)
+    config['epoch'] = int(5 * config['epoch'] / config['num_dems'])
+    config['diffusion_epoch'] = int(5 * config['diffusion_epoch'] / config['num_dems'])
     # Create task-specific directory
     os.makedirs(output_path, exist_ok=True)
     config_path = os.path.join(output_path, 'config.yaml')
@@ -53,36 +63,36 @@ def update_config(base_config_path, task_name, output_path):
     return config_path
 
 def train_model(config_path, seed, timestamp):
-    try:
+    # try:
         # Load config with shared timestamp
-        Config.load_config_for_training(config_path, timestamp=timestamp)
-        
-        # Set random seed
-        seedEverything(seed)
-        
-        # Ensure the base log directory exists and save config
-        os.makedirs(Config.BASE_LOG_PATH, exist_ok=True)
-        config_copy_path = os.path.join(Config.BASE_LOG_PATH, 'config.yaml')
-        shutil.copy2(config_path, config_copy_path)
-        print(f"Config file copied to: {config_copy_path}")
-        
-        # Train all models
-        print("Training baseline BC model...")
-        train_baseline_bc(Config.NUM_DEMS, seed, Config)
-        
-        print("Training joint state-action model...")
-        train_model_joint(Config.NUM_DEMS, seed, Config)
-        
-        print("Training joint state-action model with delta state...")
-        train_model_joint(Config.NUM_DEMS, seed, Config, predict_state_delta=True)
-        
-        # print("Training diffusion policy...")
-        # train_diffusion_policy(Config.NUM_DEMS, seed, Config)
-        
-        return True
-    except Exception as e:
-        print(f"Training failed with error: {str(e)}")
-        return False
+    Config.load_config_for_training(config_path, timestamp=timestamp)
+    
+    # Set random seed
+    seedEverything(seed)
+    
+    # Ensure the base log directory exists and save config
+    os.makedirs(Config.BASE_LOG_PATH, exist_ok=True)
+    config_copy_path = os.path.join(Config.BASE_LOG_PATH, 'config.yaml')
+    shutil.copy2(config_path, config_copy_path)
+    print(f"Config file copied to: {config_copy_path}")
+    
+    # Train all models
+    print("Training baseline BC model...")
+    train_baseline_bc(Config.NUM_DEMS, seed, Config)
+    
+    print("Training joint state-action model...")
+    train_model_joint(Config.NUM_DEMS, seed, Config)
+    
+    # print("Training joint state-action model with delta state...")
+    # train_model_joint(Config.NUM_DEMS, seed, Config, predict_state_delta=True)
+    
+    # print("Training diffusion policy...")
+    # train_diffusion_policy(Config.NUM_DEMS, seed, Config)
+    
+    return True
+    # except Exception as e:
+    #     print(f"Training failed with error: {str(e)}")
+    #     return False
 
 def eval_model(config_path, checkpoint_dir, num_episodes=100):
     # Check if model files exist
@@ -119,6 +129,8 @@ def get_checkpoint_dir(config_path, seed):
     )
 
 def main():
+    # # Set start method to spawn
+    # mp.set_start_method('spawn', force=True)
     parser = construct_parser()
     args = parser.parse_args()
 

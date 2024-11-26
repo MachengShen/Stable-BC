@@ -3,13 +3,13 @@ import yaml
 from datetime import datetime
 
 CCIL_TASK_ENV_MAP = {
-    "pendulum_cont_100": "PendulumSwingupCont-v0",
+    # "pendulum_cont_100": "PendulumSwingupCont-v0",
     "walker2d-expert-v2_20": "walker2d-expert-v2",
     "hopper-expert-v2_25": "hopper-expert-v2",
     "ant-expert-v2_10": "ant-expert-v2",
-    "pendulum_disc_500": "PendulumSwingupDisc-v0",
-    "metaworld-button-press-top-down-v2": "button-press-topdown-v2",
     "halfcheetah-expert-v2_50": "halfcheetah-expert-v2",
+    # "pendulum_disc_500": "PendulumSwingupDisc-v0",
+    "metaworld-button-press-top-down-v2": "button-press-topdown-v2",
     "metaworld-coffee-push-v2_50": "coffee-push-v2",
     "metaworld-coffee-pull-v2_50": "coffee-pull-v2",
     "metaworld-drawer-close-v2": "drawer-close-v2",

@@ -23,7 +23,7 @@ ccil_data_dir: "../CCIL-main/data"  # Only needed for CCIL tasks
 ccil_task_name: 'metaworld-drawer-close-v2'    # Only needed for CCIL tasks
 
 # Dataset settings
-num_dems: 5
+num_dems: 10
 
 # Training settings
 epoch: 1000
@@ -45,7 +45,7 @@ action_loss_weight_bc: 0.72
 action_loss_weight_denoising: 0.53
 
 # Logging paths
-base_log_path: "/cephfs/cjyai/joint_denoising_bc_new/"
+base_log_path: "/cephfs/cjyai/joint_denoising_bc_debugged/" # "/cephfs/cjyai/joint_denoising_bc_debugged/"
 
 
 # Evaluation settings during training

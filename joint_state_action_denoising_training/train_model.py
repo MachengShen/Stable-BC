@@ -15,6 +15,7 @@ from models import MLP
 from diffusion_model import DiffusionPolicy
 from policy_agents import JointStateActionAgent, BaselineBCAgent, RandomAgent, DiffusionPolicyAgent
 from ccil_utils import load_env
+# import torch.multiprocessing as mp
 
 # stable bc training, may require a dynamics model for each task
 def train_model(
@@ -204,6 +205,15 @@ def loss_func(y_true, y_pred, action_dim, state_dim):
     return action_loss, state_loss
 
 
+def get_dataloader_kwargs(device, Config):
+    """Helper function to get consistent DataLoader settings"""
+    return {
+        'batch_size': Config.BATCH_SIZE,
+        # 'num_workers': 1,
+        # 'pin_memory': not (device.type == 'cuda'),
+        # 'persistent_workers': True
+    }
+
 def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_state_delta=False):
     # Load data based on the task type
     controls_list, x_traj_list = load_data(Config)
@@ -284,17 +294,29 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
         state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER
     )
 
+    # Get DataLoader settings
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    loader_kwargs = get_dataloader_kwargs(device, Config)
+
     train_bc_dataloader = torch.utils.data.DataLoader(
-        train_bc_dataset, batch_size=Config.BATCH_SIZE, shuffle=True
+        train_bc_dataset, 
+        shuffle=True,
+        **loader_kwargs
     )
     train_denoising_dataloader = torch.utils.data.DataLoader(
-        train_denoising_dataset, batch_size=Config.BATCH_SIZE, shuffle=True
+        train_denoising_dataset, 
+        shuffle=True,
+        **loader_kwargs
     )
     val_bc_dataloader = torch.utils.data.DataLoader(
-        val_bc_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
+        val_bc_dataset, 
+        shuffle=False,
+        **loader_kwargs
     )
     val_denoising_dataloader = torch.utils.data.DataLoader(
-        val_denoising_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
+        val_denoising_dataset, 
+        shuffle=False,
+        **loader_kwargs
     )
 
     # Set up TensorBoard with delta state notation
@@ -304,6 +326,8 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     # Initialize environment for evaluation
     env, meta_env = load_env(Config)
     env.seed(random_seed)
+    
+    mean_rewards = {'joint_bc': [], 'denoising_joint_bc': []}
     
     # Training loop
     for epoch in range(Config.EPOCH):
@@ -414,6 +438,9 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
             )
             denoising_results = evaluate_model(denoising_agent, env, meta_env, device)
             
+            mean_rewards['joint_bc'].append(bc_results[0.0]['mean_reward'])
+            mean_rewards['denoising_joint_bc'].append(denoising_results[0.0]['mean_reward'])
+            
             # Log evaluation results with state type notation
             for noise in bc_results:
                 writer.add_scalar(f'Eval/BC_{state_type}_Mean_Reward_{noise}', bc_results[noise]['mean_reward'], epoch)
@@ -427,7 +454,7 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
 
     print("Joint training completed and models saved.")
     writer.close()
-    return model, denoising_model
+    return model, denoising_model, mean_rewards
 
 def train_baseline_bc(num_dems, random_seed, Config):
     """Train a baseline BC model that only maps states to actions"""
@@ -463,11 +490,19 @@ def train_baseline_bc(num_dems, random_seed, Config):
     train_dataset = BCDataset(x_traj_list=train_x_traj_list, controls_list=train_controls_list, action_only=True)
     val_dataset = BCDataset(x_traj_list=val_x_traj_list, controls_list=val_controls_list, action_only=True)
 
+    # Get DataLoader settings
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    loader_kwargs = get_dataloader_kwargs(device, Config)
+
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True
+        train_dataset, 
+        shuffle=True,
+        **loader_kwargs
     )
     val_dataloader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
+        val_dataset, 
+        shuffle=False,
+        **loader_kwargs
     )
 
     # Initialize model and optimizer with weight decay
@@ -580,11 +615,19 @@ def train_diffusion_policy(num_dems, random_seed, Config):
     train_dataset = BCDataset(x_traj_list=train_x_traj_list, controls_list=train_controls_list)
     val_dataset = BCDataset(x_traj_list=val_x_traj_list, controls_list=val_controls_list)
 
+    # Get DataLoader settings
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    loader_kwargs = get_dataloader_kwargs(device, Config)
+
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True
+        train_dataset, 
+        shuffle=True,
+        **loader_kwargs
     )
     val_dataloader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False
+        val_dataset, 
+        shuffle=False,
+        **loader_kwargs
     )
 
     # Initialize diffusion policy and optimizer with weight decay
@@ -671,3 +714,7 @@ def train_diffusion_policy(num_dems, random_seed, Config):
     
     writer.close()
     return diffusion 
+
+# if __name__ == '__main__':
+#     # Set start method to spawn
+#     mp.set_start_method('spawn', force=True)
