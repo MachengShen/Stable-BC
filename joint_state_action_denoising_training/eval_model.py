@@ -218,8 +218,8 @@ def construct_parser():
     parser.add_argument("--config_path", type=str, required=True, help="Path to config file")
     parser.add_argument("--checkpoint_dir", type=str, required=True, help="Path to model checkpoint directory")
     parser.add_argument("--num_eval_episodes", type=int, default=100, help="Number of evaluation episodes")
-    parser.add_argument("--methods", nargs='+', default=['baseline', 'joint_bc', 'joint_denoising', 'joint_state_only_bc', 'random'],
-                      choices=['baseline', 'joint_bc', 'joint_denoising', 'diffusion', 'random'],
+    parser.add_argument("--methods", nargs='+', default=['baseline', 'joint_bc', 'joint_denoising', 'joint_state_only_bc', 'diffusion', 'random'],
+                      choices=['baseline', 'joint_bc', 'joint_denoising', 'joint_state_only_bc', 'diffusion', 'random'],
                       help="List of methods to evaluate")
     return parser
 
