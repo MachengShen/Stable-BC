@@ -3,11 +3,12 @@ import pickle
 import torch
 
 class JointStateActionAgent:
-    def __init__(self, bc_model, denoising_model, device, action_dim, stats_path):
+    def __init__(self, bc_model, denoising_model, device, action_dim, stats_path, state_only_bc=False):
         self.bc_model = bc_model
         self.denoising_model = denoising_model
         self.device = device
         self.action_dim = action_dim
+        self.state_only_bc = state_only_bc
         
         # Load normalization statistics
         with open(os.path.join(stats_path, 'normalization_stats.pkl'), 'rb') as f:
@@ -24,27 +25,40 @@ class JointStateActionAgent:
         return action * self.action_std + self.action_mean
 
     def predict(self, state):
-        state_tensor = torch.FloatTensor(state).to(self.device)
-        if len(state_tensor.shape) == 1:
-            state_tensor = state_tensor.unsqueeze(0)
-
-        # Normalize state
-        state_tensor = self.normalize_state(state_tensor)
-
+        """Predict action given state"""
         with torch.no_grad():
-            # Get initial prediction from BC model
-            bc_output = self.bc_model(state_tensor)
-            action = bc_output[:, :self.action_dim]
-            next_state_pred = bc_output[:, self.action_dim:]
+            # Normalize state
+            state_tensor = torch.FloatTensor(state).to(self.device)
+            if len(state_tensor.shape) == 1:
+                state_tensor = state_tensor.unsqueeze(0)
+            state_tensor = self.normalize_state(state_tensor)
             
-            # Use denoising model if available
-            if self.denoising_model is not None:
-                # Prepare input for denoising model: [current_state, noisy_action, next_state]
-                denoising_input = torch.cat([state_tensor, action, next_state_pred], dim=1)
-                denoised_output = self.denoising_model(denoising_input)
-                action = denoised_output[:, :self.action_dim]
-
-            # Denormalize action before returning
+            # Get BC prediction
+            bc_output = self.bc_model(state_tensor)
+            
+            if self.state_only_bc:
+                # BC model only predicts next state
+                next_state_pred = bc_output
+                
+                if self.denoising_model is not None:
+                    # Use denoising model to get [action, next_state]
+                    denoising_input = torch.cat([state_tensor, next_state_pred], dim=-1)
+                    denoising_output = self.denoising_model(denoising_input)
+                    action = denoising_output[:, :self.action_dim]
+                else:
+                    # Without denoising model, we can't get action
+                    raise ValueError("Cannot predict action with state_only_bc=True without denoising model")
+            else:
+                # BC model predicts [action, next_state]
+                action = bc_output[:, :self.action_dim]
+                
+                if self.denoising_model is not None:
+                    # Use denoising model to refine prediction
+                    denoising_input = torch.cat([state_tensor, bc_output], dim=-1)
+                    denoising_output = self.denoising_model(denoising_input)
+                    action = denoising_output[:, :self.action_dim]
+            
+            # Denormalize action
             action = self.denormalize_action(action)
             
         if action is None:

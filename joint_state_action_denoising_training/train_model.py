@@ -204,6 +204,13 @@ def loss_func(y_true, y_pred, action_dim, state_dim):
     state_loss = loss(y_true[:, action_dim:], y_pred[:, action_dim:])
     return action_loss, state_loss
 
+def loss_func_state_only_bc(y_true, y_pred, state_dim):
+    assert y_true.shape[1] == state_dim
+    assert y_pred.shape[1] == state_dim
+    loss = nn.MSELoss(reduction="mean")
+    state_loss = loss(y_true, y_pred)
+    return state_loss
+
 
 def get_dataloader_kwargs(device, Config):
     """Helper function to get consistent DataLoader settings"""
@@ -214,11 +221,16 @@ def get_dataloader_kwargs(device, Config):
         # 'persistent_workers': True
     }
 
-def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_state_delta=False):
+def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_state_delta=False, state_only_bc=False):
+    """
+    Train joint model with multiple options:
+    1. BC predicts [a_t, x_t+1] or [a_t, delta_x_t], denoiser predicts clean version from noisy inputs
+    2. BC predicts x_t+1 or delta_x_t only, denoiser predicts [a_t, x_t+1] or [a_t, delta_x_t] from [x_t, noisy_x_t+1]
+    """
     # Load data based on the task type
     controls_list, x_traj_list = load_data(Config)
     
-    # Get normalized state deltas if needed
+    # Get state deltas if needed
     if predict_state_delta:
         delta_x_traj_list = get_delta_x_traj_list(x_traj_list)
         x_traj_list = delta_x_traj_list
@@ -257,10 +269,10 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = MLP(
         input_dim=state_dim, 
-        output_dim=action_dim + state_dim, 
+        output_dim=state_dim if state_only_bc else action_dim + state_dim, 
     )
     denoising_model = MLP(
-        input_dim=action_dim + state_dim * 2, 
+        input_dim=state_dim * 2 if state_only_bc else action_dim + state_dim * 2, 
         output_dim=action_dim + state_dim, 
     )
 
@@ -275,23 +287,29 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     )
 
     # Load and prepare datasets
-    train_bc_dataset = BCDataset(x_traj_list=train_x_traj_list, controls_list=train_controls_list)
+    train_bc_dataset = BCDataset(x_traj_list=train_x_traj_list, controls_list=train_controls_list, state_only=state_only_bc)
     train_denoising_dataset = DenoisingDataset(
         x_traj_list=train_x_traj_list,
         controls_list=train_controls_list,
         action_noise_factor=controls_std,
         state_noise_factor=x_traj_std,
         action_noise_multiplier=Config.ACTION_NOISE_MULTIPLIER,
-        state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER
+        state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER,
+        input_state_only=state_only_bc
     )
-    val_bc_dataset = BCDataset(x_traj_list=val_x_traj_list, controls_list=val_controls_list)
+    val_bc_dataset = BCDataset(
+        x_traj_list=val_x_traj_list, 
+        controls_list=val_controls_list,
+        state_only=state_only_bc
+    )
     val_denoising_dataset = DenoisingDataset(
         x_traj_list=val_x_traj_list,
         controls_list=val_controls_list,
         action_noise_factor=controls_std,
         state_noise_factor=x_traj_std,
         action_noise_multiplier=Config.ACTION_NOISE_MULTIPLIER,
-        state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER
+        state_noise_multiplier=Config.STATE_NOISE_MULTIPLIER,
+        input_state_only=state_only_bc
     )
 
     # Get DataLoader settings
@@ -321,6 +339,8 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
 
     # Set up TensorBoard with delta state notation
     state_type = "delta_state" if predict_state_delta else "next_state"
+    if state_only_bc:
+        state_type = "state_only_bc"
     writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + f"_{state_type}")
 
     # Initialize environment for evaluation
@@ -351,8 +371,13 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
 
             # Train behavior cloning model
             predicted_actions = model(states)
-            bc_action_loss, bc_state_loss = loss_func(actions_next_states, predicted_actions, action_dim, state_dim)
-            bc_loss = Config.ACTION_LOSS_WEIGHT_BC * bc_action_loss + Config.STATE_LOSS_WEIGHT_BC * bc_state_loss
+            if state_only_bc:
+                # here action_next_states and predicted_actions are actually next_states
+                bc_state_loss = loss_func_state_only_bc(actions_next_states, predicted_actions, state_dim)
+                bc_loss = bc_state_loss
+            else:
+                bc_action_loss, bc_state_loss = loss_func(actions_next_states, predicted_actions, action_dim, state_dim)
+                bc_loss = Config.ACTION_LOSS_WEIGHT_BC * bc_action_loss + Config.STATE_LOSS_WEIGHT_BC * bc_state_loss
 
             # Unpack denoising batch
             noisy_actions_next_states, clean_actions_next_states = denoising_batch
@@ -383,7 +408,8 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
 
             # Log training losses with clear state type notation
             writer.add_scalar(f'Training/BC_{state_type}_Loss', bc_state_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
-            writer.add_scalar('Training/BC_Action_Loss', bc_action_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
+            if not state_only_bc:
+                writer.add_scalar('Training/BC_Action_Loss', bc_action_loss.item(), epoch * len(train_bc_dataloader) + batch_idx)
             writer.add_scalar(f'Training/Denoising_{state_type}_Loss', denoising_state_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
             writer.add_scalar('Training/Denoising_Action_Loss', denoising_action_loss.item(), epoch * len(train_denoising_dataloader) + batch_idx)
 
@@ -400,8 +426,12 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
                 val_states = val_states.to(device)
                 val_actions_next_states = val_actions_next_states.to(device)
                 val_predicted_actions = model(val_states)
-                val_bc_action_loss, val_bc_state_loss = loss_func(val_predicted_actions, val_actions_next_states, action_dim, state_dim)
-                val_bc_loss = Config.ACTION_LOSS_WEIGHT_BC * val_bc_action_loss + Config.STATE_LOSS_WEIGHT_BC * val_bc_state_loss
+                if state_only_bc:
+                    val_bc_state_loss = loss_func_state_only_bc(val_actions_next_states, val_predicted_actions, state_dim)
+                    val_bc_loss = val_bc_state_loss
+                else:
+                    val_bc_action_loss, val_bc_state_loss = loss_func(val_predicted_actions, val_actions_next_states, action_dim, state_dim)
+                    val_bc_loss = Config.ACTION_LOSS_WEIGHT_BC * val_bc_action_loss + Config.STATE_LOSS_WEIGHT_BC * val_bc_state_loss
                 val_bc_loss += val_bc_loss
 
                 # Validate denoising model
@@ -420,41 +450,47 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
 
         # Log validation losses with clear state type notation
         writer.add_scalar(f'Validation/BC_{state_type}_Loss', val_bc_state_loss, epoch)
-        writer.add_scalar('Validation/BC_Action_Loss', val_bc_action_loss, epoch)
+        if not state_only_bc:
+            writer.add_scalar('Validation/BC_Action_Loss', val_bc_action_loss, epoch)
         writer.add_scalar(f'Validation/Denoising_{state_type}_Loss', val_denoising_state_loss, epoch)
         writer.add_scalar('Validation/Denoising_Action_Loss', val_denoising_action_loss, epoch)
 
         # Periodic evaluation (every 100 epochs or as specified in config)
         if epoch % (Config.EVAL_INTERVAL_FACTOR * Config.EPOCH) == 0:
-            # Evaluate BC model
-            bc_agent = JointStateActionAgent(
+            if not state_only_bc: # state_only_bc requires denoising model
+                # Evaluate BC model
+                bc_agent = JointStateActionAgent(
                 model, None, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
-            )
-            bc_results = evaluate_model(bc_agent, env, meta_env, device)
+                )
+                bc_results = evaluate_model(bc_agent, env, meta_env, device)
             
             # Evaluate denoising model
             denoising_agent = JointStateActionAgent(
-                model, denoising_model, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
+                model, denoising_model, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed), state_only_bc=state_only_bc
             )
             denoising_results = evaluate_model(denoising_agent, env, meta_env, device)
             
-            mean_rewards['joint_bc'].append(bc_results[0.0]['mean_reward'])
+            if not state_only_bc:
+                mean_rewards['joint_bc'].append(bc_results[0.0]['mean_reward'])
             mean_rewards['denoising_joint_bc'].append(denoising_results[0.0]['mean_reward'])
             
             # Log evaluation results with state type notation
             for noise in bc_results:
-                writer.add_scalar(f'Eval/BC_{state_type}_Mean_Reward_{noise}', bc_results[noise]['mean_reward'], epoch)
-                writer.add_scalar(f'Eval/BC_{state_type}_Success_Rate_{noise}', bc_results[noise]['success_rate'], epoch)
+                if not state_only_bc:
+                    writer.add_scalar(f'Eval/BC_{state_type}_Mean_Reward_{noise}', bc_results[noise]['mean_reward'], epoch)
+                    writer.add_scalar(f'Eval/BC_{state_type}_Success_Rate_{noise}', bc_results[noise]['success_rate'], epoch)
                 writer.add_scalar(f'Eval/Denoising_{state_type}_Mean_Reward_{noise}', denoising_results[noise]['mean_reward'], epoch)
                 writer.add_scalar(f'Eval/Denoising_{state_type}_Success_Rate_{noise}', denoising_results[noise]['success_rate'], epoch)
 
     if save_ckpt:
         # Save the trained models
-        save_models(model, denoising_model, num_dems, random_seed, Config)
+        model_surfix = "_state_only" if state_only_bc else ""
+        save_models(model, denoising_model, num_dems, random_seed, Config, model_surfix)
 
     print("Joint training completed and models saved.")
     writer.close()
     return model, denoising_model, mean_rewards
+
 
 def train_baseline_bc(num_dems, random_seed, Config):
     """Train a baseline BC model that only maps states to actions"""

@@ -75,13 +75,13 @@ def save_normalization_stats(controls_mean, controls_std, x_traj_mean, x_traj_st
         pickle.dump(stats_dict, f)
         
         
-def save_models(model, denoising_model, num_dems, random_seed, Config):
+def save_models(model, denoising_model, num_dems, random_seed, Config, model_surfix=""):
     models_path = Config.get_model_path(num_dems, random_seed)
     if not os.path.exists(models_path):
         os.makedirs(models_path)
 
-    torch.save(model.state_dict(), f"{models_path}/joint_bc_model.pt")
-    torch.save(denoising_model.state_dict(), f"{models_path}/joint_denoising_model.pt")
+    torch.save(model.state_dict(), f"{models_path}/joint_bc_model{model_surfix}.pt")
+    torch.save(denoising_model.state_dict(), f"{models_path}/joint_denoising_model{model_surfix}.pt")
 
 def evaluate_model(agent, env, meta_env, device, num_episodes=10, noise_levels=[0.0]):
     """Helper function to evaluate a model during training"""

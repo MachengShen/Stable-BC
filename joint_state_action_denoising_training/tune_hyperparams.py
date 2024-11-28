@@ -10,6 +10,7 @@ from config import Config, CCIL_TASK_ENV_MAP
 from utils import seedEverything
 import copy
 import torch.multiprocessing as mp
+from datetime import datetime
 
 def get_default_envs():
     """Get list of MuJoCo and MetaWorld environments"""
@@ -30,27 +31,39 @@ def get_default_envs():
     return metaworld_envs + mujoco_envs
 
 def save_best_params(study, trial, env_name):
-    """Save the best parameters to a JSON file"""
+    """Save the best parameters to a JSON file with history"""
     best_params = {
+        'trial_number': trial.number,
+        'total_trials': len(study.trials),
         'value': trial.value,
         'params': trial.params,
+        'timestamp': datetime.now().strftime("%Y%m%d-%H%M%S")
     }
     
     # Create results directory if it doesn't exist
     os.makedirs('hparam_results', exist_ok=True)
     
-    # Save in a human-readable format
-    filename = os.path.join('hparam_results', f'best_params_{env_name}.txt')
-    with open(filename, 'w') as f:
-        f.write(f"Best Trial Value: {trial.value}\n")
-        f.write("\nBest Parameters:\n")
-        for key, value in trial.params.items():
-            f.write(f"{key}: {value}\n")
-    
-    # Also save as JSON for programmatic access
+    # Load existing results or create new list
     json_filename = os.path.join('hparam_results', f'best_params_{env_name}.json')
+    if os.path.exists(json_filename):
+        with open(json_filename, 'r') as f:
+            history = json.load(f)
+            if not isinstance(history, list):
+                history = [history]  # Convert old format to list
+    else:
+        history = []
+    
+    # Append new best parameters
+    history.append(best_params)
+    
+    # Sort history by value (descending) and add rank
+    history.sort(key=lambda x: x['value'], reverse=True)
+    for i, result in enumerate(history):
+        result['rank'] = i + 1
+    
+    # Save updated history
     with open(json_filename, 'w') as f:
-        json.dump(best_params, f, indent=4)
+        json.dump(history, f, indent=4)
 
 def get_training_epochs(env_name):
     """Get appropriate number of epochs based on environment"""
@@ -63,13 +76,13 @@ def get_training_epochs(env_name):
     
     if env_name in mujoco_envs:
         return {
-            'epoch': 5000,  # More epochs for MuJoCo environments
-            'diffusion_epoch': 10000
+            'epoch': 1000,  # More epochs for MuJoCo environments
+            'diffusion_epoch': 5000
         }
     else:
         return {
-            'epoch': 1000,  # Default epochs for other environments
-            'diffusion_epoch': 5000
+            'epoch': 600,  # Default epochs for other environments
+            'diffusion_epoch': 3000
         }
 
 def objective(trial, base_config, seed=0, debug=False):
@@ -84,14 +97,14 @@ def objective(trial, base_config, seed=0, debug=False):
     
     # Training parameters
     config.LEARNING_RATE = trial.suggest_loguniform('learning_rate', 1e-4, 1e-3)
-    config.BATCH_SIZE = trial.suggest_int('batch_size', 64, 256)
+    # config.BATCH_SIZE = trial.suggest_int('batch_size', 64, 256)
     config.WEIGHT_DECAY = trial.suggest_loguniform('weight_decay', 1e-5, 1e-3)
     
     # Loss weights and noise parameters
     config.ACTION_LOSS_WEIGHT_BC = trial.suggest_float('action_loss_weight_bc', 0.3, 0.9)
     config.ACTION_LOSS_WEIGHT_DENOISING = trial.suggest_float('action_loss_weight_denoising', 0.05, 0.9)
-    config.ACTION_NOISE_MULTIPLIER = trial.suggest_loguniform('action_noise_multiplier', 0.001, 0.1)
-    config.STATE_NOISE_MULTIPLIER = trial.suggest_loguniform('state_noise_multiplier', 0.001, 0.1)
+    config.ACTION_NOISE_MULTIPLIER = trial.suggest_loguniform('action_noise_multiplier', 0.0001, 0.1)
+    config.STATE_NOISE_MULTIPLIER = trial.suggest_loguniform('state_noise_multiplier', 0.0001, 0.1)
     
     if debug:
         # Run without try-except for debugging
@@ -141,13 +154,30 @@ def optimize_env(env_name, base_config, n_trials, debug=False):
     
     # Load config using Config class method
     Config.load_config_for_training(tmp_config_path)
-    config = {k.lower(): v for k, v in vars(Config).items() if not k.startswith('__')}
     
     # Clean up temporary file
     os.remove(tmp_config_path)
     
-    # Create study for optimization
-    study = optuna.create_study(direction="maximize")
+    # Create directory for study storage
+    os.makedirs('hparam_results', exist_ok=True)
+    
+    # Create storage for study persistence
+    storage_name = f"sqlite:///hparam_results/study_{env_name}.db"
+    
+    # Load existing study or create new one
+    try:
+        study = optuna.load_study(
+            study_name=f"optimization_{env_name}",
+            storage=storage_name
+        )
+        print(f"Loaded existing study for {env_name} with {len(study.trials)} trials")
+    except:
+        study = optuna.create_study(
+            study_name=f"optimization_{env_name}",
+            storage=storage_name,
+            direction="maximize"
+        )
+        print(f"Created new study for {env_name}")
     
     if debug:
         # Run without try-except for debugging
@@ -196,7 +226,7 @@ def optimize_env(env_name, base_config, n_trials, debug=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True, help='Base config file')
-    parser.add_argument('--n_trials', type=int, default=20, help='Number of optimization trials per environment')
+    parser.add_argument('--n_trials', type=int, default=5, help='Number of optimization trials per environment')
     parser.add_argument('--envs', nargs='+', default=None, 
                        help='Specific environments to optimize. If not provided, will use all MuJoCo and MetaWorld envs')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode without try-except')

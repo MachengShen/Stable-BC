@@ -26,6 +26,7 @@ ccil_task_name: 'metaworld-drawer-close-v2'    # Only needed for CCIL tasks
 num_dems: 10
 
 # Training settings
+# in sweep_ccil_envs.py, epoch is override and scaled by num_dems
 epoch: 1000
 diffusion_epoch: 5000
 lr: 0.0004
@@ -45,7 +46,7 @@ action_loss_weight_bc: 0.72
 action_loss_weight_denoising: 0.53
 
 # Logging paths
-base_log_path: "/cephfs/cjyai/joint_denoising_bc_debugged/" # "/cephfs/cjyai/joint_denoising_bc_debugged/"
+base_log_path: "/cephfs/cjyai/joint_denoising_bc/" # "/cephfs/cjyai/joint_denoising_bc_debugged/"
 
 
 # Evaluation settings during training

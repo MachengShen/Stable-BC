@@ -20,10 +20,12 @@ class StateImitationDataset(Dataset):
 
 
 class BCDataset(Dataset):
-    def __init__(self, x_traj_list, controls_list, action_only=False):
+    def __init__(self, x_traj_list, controls_list, action_only=False, state_only=False):
         self.x_traj_list = x_traj_list
         self.controls_list = controls_list
         self.action_only = action_only
+        self.state_only = state_only
+        assert not (action_only and state_only), "Cannot have both action_only and state_only set to True"
 
     def __len__(self):
         return sum(len(traj) - 1 for traj in self.x_traj_list)
@@ -42,6 +44,8 @@ class BCDataset(Dataset):
         input_tensor = to_tensor(x_t)
         if self.action_only:
             output_tensor = to_tensor(a_t)
+        elif self.state_only:
+            output_tensor = to_tensor(x_t_plus_1)
         else:
             output_tensor = to_tensor(np.concatenate([a_t, x_t_plus_1]))
 
@@ -57,6 +61,7 @@ class DenoisingDataset(Dataset):
         state_noise_factor,
         action_noise_multiplier=0.02,
         state_noise_multiplier=0.02,
+        input_state_only=False,
     ):
         self.x_traj_list = x_traj_list
         self.controls_list = controls_list
@@ -64,7 +69,8 @@ class DenoisingDataset(Dataset):
         self.state_noise_factor = state_noise_factor
         self.action_noise_multiplier = action_noise_multiplier
         self.state_noise_multiplier = state_noise_multiplier
-
+        self.input_state_only = input_state_only
+        
     def __len__(self):
         return sum(len(traj) - 1 for traj in self.x_traj_list)
 
@@ -92,8 +98,11 @@ class DenoisingDataset(Dataset):
             * np.random.randn(*clean_x_t_plus_1.shape)
         )
 
-        input_tensor = to_tensor(
-            np.concatenate([clean_x_t, noisy_a_t, noisy_x_t_plus_1])
+        if self.input_state_only:
+            input_tensor = to_tensor([clean_x_t, noisy_x_t_plus_1])
+        else:
+            input_tensor = to_tensor(
+                np.concatenate([clean_x_t, noisy_a_t, noisy_x_t_plus_1])
         )
         output_tensor = to_tensor(np.concatenate([clean_a_t, clean_x_t_plus_1]))
 

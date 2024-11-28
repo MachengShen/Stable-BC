@@ -66,6 +66,16 @@ def evaluate_models(config, checkpoint_dir, num_eval_episodes=10, methods=None, 
             agents['joint_denoising'] = JointStateActionAgent(bc_model, denoising_model, device, action_dim, stats_path=checkpoint_dir)
             results['joint_denoising'] = {'timing': []}
 
+    if 'joint_state_only_bc' in methods:
+        bc_model = MLP(input_dim=state_dim, output_dim=action_dim).to(device)
+        bc_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_bc_model_state_only.pt")))
+        bc_model.eval()
+        denoising_model = MLP(input_dim=action_dim + state_dim, output_dim=action_dim + state_dim)
+        denoising_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_denoising_model_state_only.pt")))
+        denoising_model.eval()
+        agents['joint_state_only_bc'] = JointStateActionAgent(bc_model, denoising_model, device, action_dim, stats_path=checkpoint_dir, state_only_bc=True)
+        results['joint_state_only_bc'] = {'timing': []}
+        
     if 'random' in methods:
         agents['random'] = RandomAgent(env.action_space)
         results['random'] = {'timing': []}
@@ -98,7 +108,8 @@ def evaluate_models(config, checkpoint_dir, num_eval_episodes=10, methods=None, 
                 'rewards': rewards,
                 'success_rate': success / num_eval_episodes,
                 'mean_reward': np.mean(rewards),
-                'std_reward': np.std(rewards) / np.sqrt(num_eval_episodes)
+                'std_reward': np.std(rewards) / np.sqrt(num_eval_episodes),
+                'median_reward': np.median(rewards)
             }
 
     return results
@@ -107,14 +118,14 @@ def print_evaluation_results(results, methods, num_eval_episodes):
     """Print evaluation results in a formatted table"""
     # Print header
     print("\nEvaluation Results:")
-    header_width = 12 + 35 * len(methods)
+    header_width = 12 + 45 * len(methods)
     print("-" * header_width)
     
     header = f"{'Noise Level':^12} |"
     subheader = f"{'':^12} |"
     for method in methods:
-        header += f" {method:^33} |"
-        subheader += f" {'Mean±Std Reward':^18} {'Success':^13} |"
+        header += f" {method:^43} |"
+        subheader += f" {'Mean±Std Reward':^18} {'Success':^11} {'Median':^12} |"
     print(header)
     print(subheader)
     print("-" * header_width)
@@ -126,9 +137,11 @@ def print_evaluation_results(results, methods, num_eval_episodes):
         for method in methods:
             if noise in results[method]:
                 line += f" {results[method][noise]['mean_reward']:^8.2f}±{results[method][noise]['std_reward']:^7.2f}"
-                line += f" {results[method][noise]['success_rate']:^13.2f} |"
+                line += f" {results[method][noise]['median_reward']:^12.2f}"
+                line += f" {results[method][noise]['success_rate']:^11.2f} |"
+
             else:
-                line += f" {'N/A':^18} {'N/A':^13} |"
+                line += f" {'N/A':^18} {'N/A':^11} {'N/A':^12} |"
         print(line)
 
     # Print timing information
@@ -165,6 +178,7 @@ def save_evaluation_results(results, checkpoint_dir, methods, num_eval_episodes)
                 if noise in results[method]:
                     f.write(f"\n{method}:\n")
                     f.write(f"  Mean Reward: {results[method][noise]['mean_reward']:.2f} ± {results[method][noise]['std_reward']:.2f}\n")
+                    f.write(f"  Median Reward: {results[method][noise]['median_reward']:.2f}\n")
                     f.write(f"  Success Rate: {results[method][noise]['success_rate']:.2f}\n")
             f.write("\n" + "=" * 50 + "\n")
             
@@ -204,7 +218,7 @@ def construct_parser():
     parser.add_argument("--config_path", type=str, required=True, help="Path to config file")
     parser.add_argument("--checkpoint_dir", type=str, required=True, help="Path to model checkpoint directory")
     parser.add_argument("--num_eval_episodes", type=int, default=100, help="Number of evaluation episodes")
-    parser.add_argument("--methods", nargs='+', default=['baseline', 'joint_bc', 'joint_denoising', 'random'],
+    parser.add_argument("--methods", nargs='+', default=['baseline', 'joint_bc', 'joint_denoising', 'joint_state_only_bc', 'random'],
                       choices=['baseline', 'joint_bc', 'joint_denoising', 'diffusion', 'random'],
                       help="List of methods to evaluate")
     return parser

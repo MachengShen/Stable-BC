@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ROOT_DIR="/cephfs/cjyai/joint_denoising_bc"
+ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_debugged"
 NUM_EVAL_EPISODES=30
 
 # Function to process a single task directory
@@ -23,7 +23,7 @@ process_task() {
         fi
         
         # Process each seed directory
-        results_dir="$timestamp_dir/results/joint_training/5dems"
+        results_dir="$timestamp_dir/results/joint_training/10dems"
         for seed_dir in "$results_dir"/seed*/ ; do
             if [ ! -d "$seed_dir" ]; then continue; fi
             seed=$(basename "$seed_dir")

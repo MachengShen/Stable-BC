@@ -13,7 +13,7 @@ from utils import seedEverything
 def construct_parser():
     parser = argparse.ArgumentParser(description='Sweep through CCIL environments')
     parser.add_argument('--base_config', type=str, default='config.yaml', help='Base config file path')
-    parser.add_argument('--seeds', type=int, nargs='+', default=[0, 1], help='Random seeds to use')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[0, 1, 2], help='Random seeds to use')
     parser.add_argument('--mode', type=str, choices=['train', 'eval', 'both'], default='both', help='Mode to run')
     parser.add_argument('--task', type=str, default=None, help='Specific task to run (optional)')
     return parser
@@ -34,20 +34,14 @@ def update_config(base_config_path, task_name, output_path):
         'ant-expert-v2_10',
         'halfcheetah-expert-v2_50'
     ]
-    # env_epochs = {
-    #     'walker2d-expert-v2_20': 5000,
-    #     'hopper-expert-v2_25': 5000,
-    #     'ant-expert-v2_10': 5000,
-    #     'halfcheetah-expert-v2_50': 5000
-    # }
     
     # Set epochs based on environment type
     if task_name in mujoco_envs:
-        config['epoch'] = 5000  # More epochs for MuJoCo environments
-        config['diffusion_epoch'] = 10000  # Even more epochs for diffusion on MuJoCo
+        config['epoch'] = 1000  # More epochs for MuJoCo environments
+        config['diffusion_epoch'] = 5000  # Even more epochs for diffusion on MuJoCo
     else:
-        config['epoch'] = 1000  # Default epochs for other environments
-        config['diffusion_epoch'] = 5000  # Default epochs for diffusion
+        config['epoch'] = 600  # Default epochs for other environments
+        config['diffusion_epoch'] = 3000  # Default epochs for diffusion
     
     # Scale epochs based on number of demos (size of dataset)
     config['epoch'] = int(5 * config['epoch'] / config['num_dems'])
@@ -82,6 +76,9 @@ def train_model(config_path, seed, timestamp):
     
     print("Training joint state-action model...")
     train_model_joint(Config.NUM_DEMS, seed, Config)
+    
+    print("Training joint state-action model with state-only BC...")
+    train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True)
     
     # print("Training joint state-action model with delta state...")
     # train_model_joint(Config.NUM_DEMS, seed, Config, predict_state_delta=True)
