@@ -99,7 +99,7 @@ class DenoisingDataset(Dataset):
         )
 
         if self.input_state_only:
-            input_tensor = to_tensor([clean_x_t, noisy_x_t_plus_1])
+            input_tensor = to_tensor(np.concatenate([clean_x_t, noisy_x_t_plus_1]))
         else:
             input_tensor = to_tensor(
                 np.concatenate([clean_x_t, noisy_a_t, noisy_x_t_plus_1])

@@ -475,7 +475,7 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
             mean_rewards['denoising_joint_bc'].append(denoising_results[0.0]['mean_reward'])
             
             # Log evaluation results with state type notation
-            for noise in bc_results:
+            for noise in denoising_results:
                 if not state_only_bc:
                     writer.add_scalar(f'Eval/BC_{state_type}_Mean_Reward_{noise}', bc_results[noise]['mean_reward'], epoch)
                     writer.add_scalar(f'Eval/BC_{state_type}_Success_Rate_{noise}', bc_results[noise]['success_rate'], epoch)
