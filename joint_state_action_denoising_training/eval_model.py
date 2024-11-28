@@ -67,10 +67,10 @@ def evaluate_models(config, checkpoint_dir, num_eval_episodes=10, methods=None, 
             results['joint_denoising'] = {'timing': []}
 
     if 'joint_state_only_bc' in methods:
-        bc_model = MLP(input_dim=state_dim, output_dim=action_dim).to(device)
+        bc_model = MLP(input_dim=state_dim, output_dim=state_dim).to(device)
         bc_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_bc_model_state_only.pt")))
         bc_model.eval()
-        denoising_model = MLP(input_dim=action_dim + state_dim, output_dim=action_dim + state_dim)
+        denoising_model = MLP(input_dim=2 * state_dim, output_dim=action_dim + state_dim)
         denoising_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_denoising_model_state_only.pt")))
         denoising_model.eval()
         agents['joint_state_only_bc'] = JointStateActionAgent(bc_model, denoising_model, device, action_dim, stats_path=checkpoint_dir, state_only_bc=True)
