@@ -23,10 +23,11 @@ ccil_data_dir: "../CCIL-main/data"  # Only needed for CCIL tasks
 ccil_task_name: 'metaworld-drawer-close-v2'    # Only needed for CCIL tasks
 
 # Dataset settings
-num_dems: 10
+num_dems: 10000
 
 # Training settings
-# in sweep_ccil_envs.py, epoch is override and scaled by num_dems
+# in sweep_ccil_envs.py, epoch is override and scaled by num_dems, 
+# overridein both hparam tuning and sweep_training
 epoch: 1000
 diffusion_epoch: 5000
 lr: 0.0004

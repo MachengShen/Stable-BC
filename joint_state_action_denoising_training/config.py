@@ -13,10 +13,10 @@ CCIL_TASK_ENV_MAP = {
     "halfcheetah-expert-v2_50": "halfcheetah-expert-v2",
     "pendulum_cont_100": "PendulumSwingupCont-v0",
     "pendulum_disc_500": "PendulumSwingupDisc-v0",
-    # "flythrugate_50": "flythrugate-aviary-v0",
-    # "circle_50": "circle-aviary-v0",
-    # "hover_5": "hover-aviary-v0",
-    # "f1": "f110_gym:f110-v0",
+    "flythrugate_50": "flythrugate-aviary-v0",
+    "circle_50": "circle-aviary-v0",
+    "hover_5": "hover-aviary-v0",
+    "f1": "f110_gym:f110-v0",
 }
 
 class Config:

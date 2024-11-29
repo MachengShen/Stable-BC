@@ -70,7 +70,7 @@ def evaluate_models(config, checkpoint_dir, num_eval_episodes=10, methods=None, 
         bc_model = MLP(input_dim=state_dim, output_dim=state_dim).to(device)
         bc_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_bc_model_state_only.pt")))
         bc_model.eval()
-        denoising_model = MLP(input_dim=2 * state_dim, output_dim=action_dim + state_dim)
+        denoising_model = MLP(input_dim=2 * state_dim, output_dim=action_dim + state_dim).to(device)
         denoising_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_denoising_model_state_only.pt")))
         denoising_model.eval()
         agents['joint_state_only_bc'] = JointStateActionAgent(bc_model, denoising_model, device, action_dim, stats_path=checkpoint_dir, state_only_bc=True)
@@ -125,7 +125,7 @@ def print_evaluation_results(results, methods, num_eval_episodes):
     subheader = f"{'':^12} |"
     for method in methods:
         header += f" {method:^43} |"
-        subheader += f" {'Mean±Std Reward':^18} {'Success':^11} {'Median':^12} |"
+        subheader += f" {'Mean±Std Reward':^18} {'Median':^12} {'Success':^11} |"
     print(header)
     print(subheader)
     print("-" * header_width)

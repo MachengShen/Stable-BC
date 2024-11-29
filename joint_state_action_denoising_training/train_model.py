@@ -246,7 +246,8 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     
     # randomly select num_dems indices
     seedEverything(random_seed)
-    indices = np.random.choice(len(controls_list), num_dems, replace=False)
+    num_dems = min(num_dems, len(controls_list))
+    indices = np.random.choice(len(controls_list), min(num_dems, len(controls_list)), replace=False)
     controls_list = [controls_list[i] for i in indices]
     x_traj_list = [x_traj_list[i] for i in indices]
 
@@ -505,7 +506,7 @@ def train_baseline_bc(num_dems, random_seed, Config):
     
     # Randomly select demonstrations
     seedEverything(random_seed)
-    indices = np.random.choice(len(controls_list), num_dems, replace=False)
+    indices = np.random.choice(len(controls_list), min(num_dems, len(controls_list)), replace=False)
     controls_list = [controls_list[i] for i in indices]
     x_traj_list = [x_traj_list[i] for i in indices]
 
@@ -630,7 +631,7 @@ def train_diffusion_policy(num_dems, random_seed, Config):
     
     # Randomly select demonstrations
     seedEverything(random_seed)
-    indices = np.random.choice(len(controls_list), num_dems, replace=False)
+    indices = np.random.choice(len(controls_list), min(num_dems, len(controls_list)), replace=False)
     controls_list = [controls_list[i] for i in indices]
     x_traj_list = [x_traj_list[i] for i in indices]
 

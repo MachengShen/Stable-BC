@@ -42,7 +42,7 @@ process_task() {
                 --config_path "$config_path" \
                 --checkpoint_dir "$seed_dir" \
                 --num_eval_episodes $NUM_EVAL_EPISODES \
-                --methods baseline joint_bc joint_denoising  # Specify methods to evaluate
+                --methods baseline joint_bc joint_denoising joint_state_only_bc  # Specify methods to evaluate
                 
             echo "    Completed $seed"
         done
