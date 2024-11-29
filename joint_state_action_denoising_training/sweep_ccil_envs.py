@@ -2,7 +2,7 @@ import os
 import yaml
 import subprocess
 import shutil
-from config import CCIL_TASK_ENV_MAP, Config
+from config import CCIL_TASK_ENV_MAP, CCIL_NUM_DEMS_MAP, Config
 import argparse
 from datetime import datetime
 import time
@@ -34,6 +34,9 @@ def update_config(base_config_path, task_name, output_path):
         'ant-expert-v2_10',
         'halfcheetah-expert-v2_50'
     ]
+    
+    # Set number of demos based on environment
+    config['num_dems'] = CCIL_NUM_DEMS_MAP[task_name]
     
     # Set epochs based on environment type
     if task_name in mujoco_envs:
@@ -72,6 +75,8 @@ def train_model(config_path, seed, timestamp):
     
     # Train all models
     print("Training baseline BC model...")
+    
+    print("number of epochs: ", Config.EPOCH)
     train_baseline_bc(Config.NUM_DEMS, seed, Config)
     
     print("Training joint state-action model...")

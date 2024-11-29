@@ -1,2 +1,27 @@
 __pycache__/
 data/
+
+# Temporary files
+tmp/
+
+# Model checkpoints
+*.pt
+*.pth
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Tensorboard logs
+tensorboard/
+
+# Pickle files
+*.pkl
+
+# Database files
+*.db
+
+# Generated files
+*.png
+*.txt

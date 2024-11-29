@@ -19,6 +19,23 @@ CCIL_TASK_ENV_MAP = {
     "f1": "f110_gym:f110-v0",
 }
 
+CCIL_NUM_DEMS_MAP = {
+    "metaworld-button-press-top-down-v2": 50,
+    "metaworld-coffee-push-v2_50": 50,
+    "metaworld-coffee-pull-v2_50": 50,
+    "metaworld-drawer-close-v2": 50,
+    "walker2d-expert-v2_20": 20,
+    "hopper-expert-v2_25": 25,
+    "ant-expert-v2_10": 10,
+    "halfcheetah-expert-v2_50": 50,
+    "pendulum_cont_100": 50,
+    "pendulum_disc_500": 500,
+    "flythrugate_50": 50,
+    "circle_50": 30,
+    "hover_5": 5,
+    "f1": 1,
+}
+
 class Config:
     TASK_TYPE = "sim-quadrotor"  # Options: "sim-quadrotor", "sim-intersection", "CCIL"
     CCIL_DATA_DIR = "/path/to/CCIL/data"  # Only needed for CCIL tasks
