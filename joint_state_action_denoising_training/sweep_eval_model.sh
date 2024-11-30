@@ -43,12 +43,12 @@ process_task() {
             if [ ! -d "$seed_dir" ]; then continue; fi
             seed=$(basename "$seed_dir")
             
-            # Check if evaluation results already exist
-            eval_results_file="$seed_dir/eval_results/evaluation_results.txt"
-            if [ -f "$eval_results_file" ]; then
-                echo "    Skipping $seed: Evaluation results already exist"
-                continue
-            fi
+            # # Check if evaluation results already exist
+            # eval_results_file="$seed_dir/eval_results/evaluation_results.txt"
+            # if [ -f "$eval_results_file" ]; then
+            #     echo "    Skipping $seed: Evaluation results already exist"
+            #     continue
+            # fi
             
             echo "    Processing $seed"
             

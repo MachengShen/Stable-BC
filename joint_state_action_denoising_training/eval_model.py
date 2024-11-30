@@ -12,6 +12,7 @@ import time
 from ccil_utils import load_env, evaluate_on_environment
 from diffusion_model import DiffusionPolicy
 from policy_agents import JointStateActionAgent, BaselineBCAgent, RandomAgent, DiffusionPolicyAgent
+from misc import EVAL_NOISE_LEVELS
 
 def evaluate_models(config, checkpoint_dir, num_eval_episodes=10, methods=None, noise_levels=None):
     """
@@ -19,9 +20,12 @@ def evaluate_models(config, checkpoint_dir, num_eval_episodes=10, methods=None, 
     Returns: Dictionary containing evaluation results
     """
     if methods is None:
-        methods = ['baseline', 'joint_bc', 'joint_denoising']
+        methods = ['baseline', 'joint_bc', 'joint_denoising', 'joint_state_only_bc']
     if noise_levels is None:
-        noise_levels = [0, 0.0003, 0.001, 0.01, 0.1]
+        if config.TASK_TYPE == "CCIL" and config.CCIL_TASK_NAME in EVAL_NOISE_LEVELS:
+            noise_levels = EVAL_NOISE_LEVELS[config.CCIL_TASK_NAME]
+        else:
+            noise_levels = [0, 0.00005, 0.0001, 0.0002, 0.0003, 0.001, 0.003, 0.01, 0.1]
     
     # Set random seed
     seedEverything(config.SEED if hasattr(config, 'SEED') else 42)
@@ -202,7 +206,8 @@ def main():
         Config,
         args.checkpoint_dir,
         args.num_eval_episodes,
-        args.methods
+        args.methods,
+        noise_levels=[0, 0.00005, 0.0001, 0.0002, 0.0003, 0.001, 0.01, 0.1],
     )
     
     # Print results
