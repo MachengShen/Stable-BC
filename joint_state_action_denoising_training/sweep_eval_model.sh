@@ -1,7 +1,8 @@
 #!/bin/bash
 
-ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_save_best"
+ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_save_best/"
 NUM_EVAL_EPISODES=30
+SPECIFIC_TASK=$1
 
 # Function to process a single task directory
 process_task() {
@@ -64,10 +65,22 @@ process_task() {
     done
 }
 
-# Process each task directory
-for task_dir in "$ROOT_DIR"/*/ ; do
-    if [ ! -d "$task_dir" ]; then continue; fi
-    process_task "$task_dir"
-done
+# Modified main execution section at the bottom
+if [ -n "$SPECIFIC_TASK" ]; then
+    # Process only the specified task
+    task_dir="$ROOT_DIR$SPECIFIC_TASK"
+    if [ -d "$task_dir" ]; then
+        process_task "$task_dir"
+    else
+        echo "Error: Task directory '$SPECIFIC_TASK' not found in $ROOT_DIR"
+        exit 1
+    fi
+else
+    # Process all task directories as before
+    for task_dir in "$ROOT_DIR"/*/ ; do
+        if [ ! -d "$task_dir" ]; then continue; fi
+        process_task "$task_dir"
+    done
+fi
 
 echo "Evaluation sweep completed!"
