@@ -13,7 +13,7 @@ from utils import seedEverything
 def construct_parser():
     parser = argparse.ArgumentParser(description='Sweep through CCIL environments')
     parser.add_argument('--base_config', type=str, default='config.yaml', help='Base config file path')
-    parser.add_argument('--seeds', type=int, nargs='+', default=[3, 4, 5, 6, 7, 8, 9], help='Random seeds to use')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[3, 4, 5], help='Random seeds to use')
     parser.add_argument('--mode', type=str, choices=['train', 'eval', 'both'], default='both', help='Mode to run')
     parser.add_argument('--task', type=str, default=None, help='Specific task to run (optional)')
     return parser

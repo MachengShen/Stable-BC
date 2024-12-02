@@ -47,7 +47,7 @@ action_loss_weight_bc: 0.72
 action_loss_weight_denoising: 0.53
 
 # Logging paths
-base_log_path: "/cephfs/cjyai/joint_denoising_bc_new/" # "/cephfs/cjyai/joint_denoising_bc_debugged/"
+base_log_path: "/cephfs/cjyai/joint_denoising_bc_save_best/" # "/cephfs/cjyai/joint_denoising_bc_debugged/"
 
 
 # Evaluation settings during training
