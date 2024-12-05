@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 import torch
 from utils import seedEverything
-from models import MLP
+from models import MLP, DenoisingMLP
 from config import Config
 import d3rlpy
 import d4rl
@@ -46,6 +46,13 @@ def evaluate_models(config, checkpoint_dir, noise_levels, num_eval_episodes, met
         agents['baseline'] = BaselineBCAgent(baseline_model, device, action_dim, stats_path=checkpoint_dir)
         results['baseline'] = {'timing': []}
 
+    if 'baseline_noisy' in methods:
+        noisy_baseline_model = MLP(input_dim=state_dim, output_dim=action_dim).to(device)
+        noisy_baseline_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "baseline_bc_model_noisy.pt")))
+        noisy_baseline_model.eval()
+        agents['baseline_noisy'] = BaselineBCAgent(noisy_baseline_model, device, action_dim, stats_path=checkpoint_dir)
+        results['baseline_noisy'] = {'timing': []}
+
     if 'joint_bc' in methods or 'joint_denoising' in methods:
         bc_model = MLP(input_dim=state_dim, output_dim=action_dim + state_dim).to(device)
         bc_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_bc_model.pt")))
@@ -71,6 +78,19 @@ def evaluate_models(config, checkpoint_dir, noise_levels, num_eval_episodes, met
         denoising_model.eval()
         agents['joint_state_only_bc'] = JointStateActionAgent(bc_model, denoising_model, device, action_dim, stats_path=checkpoint_dir, state_only_bc=True)
         results['joint_state_only_bc'] = {'timing': []}
+    
+    if 'joint_state_only_bc_specialized' in methods:
+        bc_model = MLP(input_dim=state_dim, output_dim=state_dim).to(device)
+        bc_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_bc_model_state_only_specialized_denoising.pt")))
+        bc_model.eval()
+        denoising_model = DenoisingMLP(state_dim=state_dim, action_dim=action_dim).to(device)
+        denoising_model.load_state_dict(torch.load(os.path.join(checkpoint_dir, "joint_denoising_model_state_only_specialized_denoising.pt")))
+        denoising_model.eval()
+        agents['joint_state_only_bc_specialized'] = JointStateActionAgent(
+            bc_model, denoising_model, device, action_dim, 
+            stats_path=checkpoint_dir, state_only_bc=True
+        )
+        results['joint_state_only_bc_specialized'] = {'timing': []}
         
     if 'random' in methods:
         agents['random'] = RandomAgent(env.action_space)
@@ -201,7 +221,7 @@ def main():
         noise_levels = [0, 0.00005, 0.0001, 0.0002, 0.0003, 0.001, 0.003, 0.01, 0.1]
     
     if args.methods is None:
-        methods = ['baseline', 'joint_bc', 'joint_denoising', 'joint_state_only_bc']
+        methods = ['baseline', 'baseline_noisy', 'joint_bc', 'joint_denoising', 'joint_state_only_bc']
     else:
         methods = args.methods
         
@@ -226,9 +246,13 @@ def construct_parser():
     parser.add_argument("--config_path", type=str, required=True, help="Path to config file")
     parser.add_argument("--checkpoint_dir", type=str, required=True, help="Path to model checkpoint directory")
     parser.add_argument("--num_eval_episodes", type=int, default=100, help="Number of evaluation episodes")
-    parser.add_argument("--methods", nargs='+', default=['baseline', 'joint_bc', 'joint_denoising', 'joint_state_only_bc', 'diffusion', 'random'],
-                      choices=['baseline', 'joint_bc', 'joint_denoising', 'joint_state_only_bc', 'diffusion', 'random'],
-                      help="List of methods to evaluate")
+    parser.add_argument("--methods", nargs='+', 
+                       default=['baseline', 'baseline_noisy', 'joint_bc', 'joint_denoising', 
+                               'joint_state_only_bc', 'joint_state_only_bc_specialized'],
+                       choices=['baseline', 'baseline_noisy', 'joint_bc', 'joint_denoising', 
+                               'joint_state_only_bc', 'joint_state_only_bc_specialized', 
+                               'diffusion', 'random'],
+                       help="List of methods to evaluate")
     return parser
 
 if __name__ == "__main__":

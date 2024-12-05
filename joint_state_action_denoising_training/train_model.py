@@ -11,7 +11,7 @@ import os, sys
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 from dataset_utils import BCDataset, DenoisingDataset, StateImitationDataset, load_data, get_delta_x_traj_list
-from models import MLP
+from models import MLP, DenoisingMLP
 from diffusion_model import DiffusionPolicy
 from policy_agents import JointStateActionAgent, BaselineBCAgent, RandomAgent, DiffusionPolicyAgent
 from ccil_utils import load_env
@@ -221,11 +221,16 @@ def get_dataloader_kwargs(device, Config):
         # 'persistent_workers': True
     }
 
-def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_state_delta=False, state_only_bc=False):
+def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_state_delta=False, 
+                     state_only_bc=False, add_inductive_bias=False):
     """
     Train joint model with multiple options:
     1. BC predicts [a_t, x_t+1] or [a_t, delta_x_t], denoiser predicts clean version from noisy inputs
     2. BC predicts x_t+1 or delta_x_t only, denoiser predicts [a_t, x_t+1] or [a_t, delta_x_t] from [x_t, noisy_x_t+1]
+    
+    Args:
+        add_inductive_bias: If True and state_only_bc is True, use DenoisingMLP
+                          with explicit denoising structure
     """
     # Load data based on the task type
     controls_list, x_traj_list = load_data(Config)
@@ -272,10 +277,17 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
         input_dim=state_dim, 
         output_dim=state_dim if state_only_bc else action_dim + state_dim, 
     )
-    denoising_model = MLP(
-        input_dim=state_dim * 2 if state_only_bc else action_dim + state_dim * 2, 
-        output_dim=action_dim + state_dim, 
-    )
+    # Choose denoising model architecture
+    if state_only_bc and add_inductive_bias:
+        denoising_model = DenoisingMLP(
+            state_dim=state_dim,
+            action_dim=action_dim,
+        )
+    else:
+        denoising_model = MLP(
+            input_dim=state_dim * 2 if state_only_bc else action_dim + state_dim * 2, 
+            output_dim=action_dim + state_dim, 
+        )
 
     model.to(device)
     denoising_model.to(device)
@@ -342,6 +354,8 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     state_type = "delta_state" if predict_state_delta else "next_state"
     if state_only_bc:
         state_type = "state_only_bc"
+    if add_inductive_bias:
+        state_type = "specialized_denoising"
     writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + f"_{state_type}")
 
     # Initialize environment for evaluation
@@ -499,6 +513,7 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     if save_ckpt:
         # Save the best models instead of final models
         model_surfix = "_state_only" if state_only_bc else ""
+        model_surfix += "_specialized_denoising" if add_inductive_bias else ""
         save_path = Config.get_model_path(num_dems, random_seed)
         os.makedirs(save_path, exist_ok=True)
         
@@ -516,8 +531,12 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     return model, denoising_model, mean_rewards
 
 
-def train_baseline_bc(num_dems, random_seed, Config):
-    """Train a baseline BC model that only maps states to actions"""
+def train_baseline_bc(num_dems, random_seed, Config, train_with_noise=False):
+    """
+    Train a baseline BC model that only maps states to actions
+    Args:
+        train_with_noise: If True, add Gaussian noise to states during training
+    """
     # Load and normalize data
     controls_list, x_traj_list = load_data(Config)
     print("stats before normalization")
@@ -573,8 +592,9 @@ def train_baseline_bc(num_dems, random_seed, Config):
                                weight_decay=Config.WEIGHT_DECAY)
     loss_fn = nn.MSELoss()
 
-    # Set up tensorboard
-    writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + "_baseline")
+    # Set up tensorboard with noisy suffix
+    model_suffix = "_noisy" if train_with_noise else ""
+    writer = SummaryWriter(Config.get_tensorboard_path(num_dems, random_seed) + f"_baseline{model_suffix}")
 
     # Initialize environment for evaluation
     env, meta_env = load_env(Config)
@@ -594,7 +614,14 @@ def train_baseline_bc(num_dems, random_seed, Config):
             states = states.to(device)
             actions = actions.to(device)
             
-            pred_actions = model(states)
+            # Add noise to states during training if enabled
+            if train_with_noise:
+                noise = torch.randn_like(states) * Config.STATE_NOISE_MULTIPLIER * torch.tensor(x_traj_std, dtype=torch.float32).to(device)
+                noisy_states = states + noise
+                pred_actions = model(noisy_states)
+            else:
+                pred_actions = model(states)
+            
             loss = loss_fn(actions, pred_actions)
             
             optimizer.zero_grad()
@@ -606,7 +633,7 @@ def train_baseline_bc(num_dems, random_seed, Config):
                 f"Epoch {epoch}, Train Loss: {total_train_loss / (batch_idx + 1):.4f}"
             )
             
-            writer.add_scalar('Training/Loss', loss.item(), 
+            writer.add_scalar(f'Training/Loss{model_suffix}', loss.item(), 
                             epoch * len(train_dataloader) + batch_idx)
 
         # Validation
@@ -621,7 +648,7 @@ def train_baseline_bc(num_dems, random_seed, Config):
                 total_val_loss += loss.item()
         
         avg_val_loss = total_val_loss / len(val_dataloader)
-        writer.add_scalar('Validation/Loss', avg_val_loss, epoch)
+        writer.add_scalar(f'Validation/Loss{model_suffix}', avg_val_loss, epoch)
         print(f"Epoch {epoch}, Validation Loss: {avg_val_loss:.4f}")
 
         # Periodic evaluation
@@ -638,21 +665,23 @@ def train_baseline_bc(num_dems, random_seed, Config):
                 best_model_state = model.state_dict().copy()
                 print(f"New best model at epoch {epoch} with reward {best_reward:.2f}")
             
-            # Log evaluation results
+            # Log evaluation results with noisy suffix
             for noise in results:
-                writer.add_scalar(f'Eval/Mean_Reward_{noise}', results[noise]['mean_reward'], epoch)
-                writer.add_scalar(f'Eval/Success_Rate_{noise}', results[noise]['success_rate'], epoch)
+                writer.add_scalar(f'Eval/Mean_Reward_{noise}{model_suffix}', 
+                                results[noise]['mean_reward'], epoch)
+                writer.add_scalar(f'Eval/Success_Rate_{noise}{model_suffix}', 
+                                results[noise]['success_rate'], epoch)
 
-    # Save best model
+    # Save best model with noisy suffix
     save_path = Config.get_model_path(num_dems, random_seed)
     os.makedirs(save_path, exist_ok=True)
     
     if best_model_state is not None:  # Check if we found a best model
-        torch.save(best_model_state, os.path.join(save_path, "baseline_bc_model.pt"))
+        torch.save(best_model_state, os.path.join(save_path, f"baseline_bc_model{model_suffix}.pt"))
         print(f"Saved best model with reward {best_reward:.2f}")
     else:
         print("Warning: No best model found, saving final model")
-        torch.save(model.state_dict(), os.path.join(save_path, "baseline_bc_model.pt"))
+        torch.save(model.state_dict(), os.path.join(save_path, f"baseline_bc_model{model_suffix}.pt"))
     
     writer.close()
     return model

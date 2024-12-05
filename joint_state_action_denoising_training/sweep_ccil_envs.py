@@ -13,7 +13,7 @@ from utils import seedEverything
 def construct_parser():
     parser = argparse.ArgumentParser(description='Sweep through CCIL environments')
     parser.add_argument('--base_config', type=str, default='config.yaml', help='Base config file path')
-    parser.add_argument('--seeds', type=int, nargs='+', default=[3, 4, 5], help='Random seeds to use')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[0, 1, 2], help='Random seeds to use')
     parser.add_argument('--mode', type=str, choices=['train', 'eval', 'both'], default='both', help='Mode to run')
     parser.add_argument('--task', type=str, default=None, help='Specific task to run (optional)')
     return parser
@@ -74,16 +74,22 @@ def train_model(config_path, seed, timestamp):
         print(f"Config file copied to: {config_copy_path}")
         
         # Train all models
-        print("Training baseline BC model...")
+        # print("Training baseline BC model...")
         
         print("number of epochs: ", Config.EPOCH)
         train_baseline_bc(Config.NUM_DEMS, seed, Config)
+
+        print("Training baseline noisy BC model")
+        train_baseline_bc(Config.NUM_DEMS, seed, Config, train_with_noise=True)
         
-        print("Training joint state-action model...")
-        train_model_joint(Config.NUM_DEMS, seed, Config)
+        # print("Training joint state-action model...")
+        # train_model_joint(Config.NUM_DEMS, seed, Config)
         
-        print("Training joint state-action model with state-only BC...")
-        train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True)
+        # print("Training joint state-action model with state-only BC...")
+        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True)
+        
+        # print("Training joint state-action model with state-only BC and specialized denoising network...")
+        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True, add_inductive_bias=True)
     
     # print("Training joint state-action model with delta state...")
     # train_model_joint(Config.NUM_DEMS, seed, Config, predict_state_delta=True)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_save_best/"
+ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_specialized_denoising/"
 NUM_EVAL_EPISODES=30
 SPECIFIC_TASK=$1
 
@@ -58,7 +58,7 @@ process_task() {
                 --config_path "$config_path" \
                 --checkpoint_dir "$seed_dir" \
                 --num_eval_episodes $NUM_EVAL_EPISODES \
-                --methods baseline joint_bc joint_denoising joint_state_only_bc
+                --methods baseline baseline_noisy joint_state_only_bc joint_state_only_bc_specialized
                 
             echo "    Completed $seed"
         done
