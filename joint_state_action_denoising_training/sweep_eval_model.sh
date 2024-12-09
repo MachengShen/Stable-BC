@@ -1,17 +1,18 @@
 #!/bin/bash
 
-ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_specialized_denoising/"
+ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_longer_training"
 NUM_EVAL_EPISODES=30
 SPECIFIC_TASK=$1
 
 # Function to process a single task directory
 process_task() {
-    local task_dir=$1
+    local task_dir="${1%/}"  # Remove trailing slash if present
     local task_name=$(basename "$task_dir")
     echo "Processing task: $task_name"
     
     # Loop through all timestamp directories in the task directory
     for timestamp_dir in "$task_dir"/*/ ; do
+        timestamp_dir="${timestamp_dir%/}"  # Remove trailing slash
         if [ ! -d "$timestamp_dir" ]; then continue; fi
         timestamp=$(basename "$timestamp_dir")
         echo "  Timestamp: $timestamp"
@@ -41,6 +42,7 @@ process_task() {
         
         # Process each seed directory
         for seed_dir in "$dems_dir"/seed*/ ; do
+            seed_dir="${seed_dir%/}"  # Remove trailing slash
             if [ ! -d "$seed_dir" ]; then continue; fi
             seed=$(basename "$seed_dir")
             
@@ -58,7 +60,7 @@ process_task() {
                 --config_path "$config_path" \
                 --checkpoint_dir "$seed_dir" \
                 --num_eval_episodes $NUM_EVAL_EPISODES \
-                --methods baseline baseline_noisy joint_state_only_bc joint_state_only_bc_specialized
+                --methods baseline baseline_noisy joint_state_only_bc # joint_state_only_bc_specialized
                 
             echo "    Completed $seed"
         done
@@ -68,7 +70,7 @@ process_task() {
 # Modified main execution section at the bottom
 if [ -n "$SPECIFIC_TASK" ]; then
     # Process only the specified task
-    task_dir="$ROOT_DIR$SPECIFIC_TASK"
+    task_dir="${ROOT_DIR%/}/${SPECIFIC_TASK#/}"  # Remove leading/trailing slashes
     if [ -d "$task_dir" ]; then
         process_task "$task_dir"
     else

@@ -362,10 +362,10 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     env, meta_env = load_env(Config)
     env.seed(random_seed)
     
-    mean_rewards = {'joint_bc': [], 'denoising_joint_bc': []}
+    mean_score = {'joint_bc': [], 'denoising_joint_bc': []}
     
     # Keep track of best models and their performance
-    best_reward = float('-inf')
+    best_score = float('-inf')
     best_bc_state = None
     best_denoising_state = None
     
@@ -491,16 +491,19 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
             denoising_results = evaluate_model(denoising_agent, env, meta_env, device)
             
             # Update best models if current performance is better
-            current_reward = denoising_results[0.0]['mean_reward']
-            if current_reward > best_reward:
-                best_reward = current_reward
+            # which noise_level to use for hyperparameter tuning with optuna
+            optuna_noise_level = 0.0001 if 0.0001 in denoising_results else 0.0
+            score_type = 'success_rate' # 'mean_reward'
+            current_score = denoising_results[optuna_noise_level][score_type]
+            if current_score > best_score:
+                best_score = current_score
                 best_bc_state = model.state_dict().copy()
                 best_denoising_state = denoising_model.state_dict().copy()
-                print(f"New best model at epoch {epoch} with reward {best_reward:.2f}")
+                print(f"New best model at epoch {epoch} with reward {best_score:.2f}")
             
             if not state_only_bc:
-                mean_rewards['joint_bc'].append(bc_results[0.0]['mean_reward'])
-            mean_rewards['denoising_joint_bc'].append(denoising_results[0.0]['mean_reward'])
+                mean_score['joint_bc'].append(bc_results[optuna_noise_level][score_type])
+            mean_score['denoising_joint_bc'].append(denoising_results[optuna_noise_level][score_type])
             
             # Log evaluation results
             for noise in denoising_results:
@@ -520,7 +523,7 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
         if best_bc_state is not None:  # Check if we found a best model
             torch.save(best_bc_state, os.path.join(save_path, f"joint_bc_model{model_surfix}.pt"))
             torch.save(best_denoising_state, os.path.join(save_path, f"joint_denoising_model{model_surfix}.pt"))
-            print(f"Saved best models with reward {best_reward:.2f}")
+            print(f"Saved best models with reward {best_score:.2f}")
         else:
             print("Warning: No best model found, saving final models")
             torch.save(model.state_dict(), os.path.join(save_path, f"joint_bc_model{model_surfix}.pt"))
@@ -528,7 +531,7 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
 
     print("Joint training completed and models saved.")
     writer.close()
-    return model, denoising_model, mean_rewards
+    return model, denoising_model, mean_score
 
 
 def train_baseline_bc(num_dems, random_seed, Config, train_with_noise=False):

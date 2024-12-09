@@ -11,6 +11,7 @@ from utils import seedEverything
 import copy
 import torch.multiprocessing as mp
 from datetime import datetime
+from misc import update_config
 
 def get_default_envs():
     """Get list of MuJoCo and MetaWorld environments"""
@@ -81,9 +82,12 @@ def get_training_epochs(env_name):
         }
     else:
         return {
-            'epoch': 600,  # Default epochs for other environments
+            'epoch': 1500,  # Default epochs for other environments
             'diffusion_epoch': 3000
         }
+        
+        
+
 
 def objective(trial, base_config, seed=0, debug=False):
     """Optimization objective function"""
@@ -96,22 +100,22 @@ def objective(trial, base_config, seed=0, debug=False):
         setattr(config, key.upper(), value)
     
     # Training parameters
-    config.LEARNING_RATE = trial.suggest_loguniform('learning_rate', 1e-4, 1e-3)
-    # config.BATCH_SIZE = trial.suggest_int('batch_size', 64, 256)
-    config.WEIGHT_DECAY = trial.suggest_loguniform('weight_decay', 1e-5, 1e-3)
+    # config.LEARNING_RATE = trial.suggest_loguniform('learning_rate', 1e-4, 1e-3)
+    # # config.BATCH_SIZE = trial.suggest_int('batch_size', 64, 256)
+    # config.WEIGHT_DECAY = trial.suggest_loguniform('weight_decay', 1e-5, 1e-3)
     
     # Loss weights and noise parameters
-    config.ACTION_LOSS_WEIGHT_BC = trial.suggest_float('action_loss_weight_bc', 0.3, 0.9)
+    # config.ACTION_LOSS_WEIGHT_BC = trial.suggest_float('action_loss_weight_bc', 0.3, 0.9)
     config.ACTION_LOSS_WEIGHT_DENOISING = trial.suggest_float('action_loss_weight_denoising', 0.05, 0.9)
-    config.ACTION_NOISE_MULTIPLIER = trial.suggest_loguniform('action_noise_multiplier', 0.0001, 0.1)
-    config.STATE_NOISE_MULTIPLIER = trial.suggest_loguniform('state_noise_multiplier', 0.0001, 0.1)
+    # config.ACTION_NOISE_MULTIPLIER = trial.suggest_loguniform('action_noise_multiplier', 0.0001, 0.1)
+    config.STATE_NOISE_MULTIPLIER = trial.suggest_loguniform('state_noise_multiplier', 0.0001, 0.03)
     
     if debug:
         # Run without try-except for debugging
         seedEverything(seed)
         
         # Train model
-        bc_model, denoising_model, mean_rewards = train_model_joint(config.NUM_DEMS, seed, config, save_ckpt=False)
+        bc_model, denoising_model, mean_rewards = train_model_joint(config.NUM_DEMS, seed, config, save_ckpt=False, state_only_bc=True)
         
         # Use the median of evaluation rewards as objective
         if mean_rewards and len(mean_rewards['denoising_joint_bc']) > 0:
@@ -120,16 +124,16 @@ def objective(trial, base_config, seed=0, debug=False):
             return float('-inf')
     else:
         try:
-            seedEverything(seed)
-            
-            # Train model
-            bc_model, denoising_model, mean_rewards = train_model_joint(config.NUM_DEMS, seed, config, save_ckpt=False)
-            
+            max_scores = []
+            for seed in [0, 1, 2]:
+                seedEverything(seed)
+                
+                # Train model
+                bc_model, denoising_model, mean_scores = train_model_joint(config.NUM_DEMS, seed, config, save_ckpt=False)
+                max_scores.append(np.max(mean_scores['denoising_joint_bc']))
+                
             # Use the median of evaluation rewards as objective
-            if mean_rewards and len(mean_rewards['denoising_joint_bc']) > 0:
-                return np.median(mean_rewards['denoising_joint_bc'])
-            else:
-                return float('-inf')
+            return np.mean(max_scores)
         
         except Exception as e:
             print(f"Trial failed with error: {str(e)}")
