@@ -13,6 +13,12 @@ import torch.multiprocessing as mp
 from datetime import datetime
 from misc import update_config
 
+tune_noise_levels = {'metaworld-button-press-top-down-v2': [0.0001, 0.0005],
+                     'metaworld-coffee-push-v2_50': [0.0001, 0.0005],
+                     'metaworld-coffee-pull-v2_50': [0.0005, 0.001],
+                     'metaworld-drawer-close-v2': [0.0005, 0.001],
+                     }
+
 def get_default_envs():
     """Get list of MuJoCo and MetaWorld environments"""
     mujoco_envs = [
@@ -29,17 +35,28 @@ def get_default_envs():
         'metaworld-drawer-close-v2'
     ]
     
-    return metaworld_envs + mujoco_envs
+    return metaworld_envs # + mujoco_envs
 
 def save_best_params(study, trial, env_name):
     """Save the best parameters to a JSON file with history"""
-    best_params = {
-        'trial_number': trial.number,
-        'total_trials': len(study.trials),
-        'value': trial.value,
-        'params': trial.params,
-        'timestamp': datetime.now().strftime("%Y%m%d-%H%M%S")
-    }
+    if isinstance(trial.values, (list, tuple)):
+        # For multi-objective optimization
+        best_params = {
+            'trial_number': trial.number,
+            'total_trials': len(study.trials),
+            'values': trial.values,  # List of values for each objective
+            'params': trial.params,
+            'timestamp': datetime.now().strftime("%Y%m%d-%H%M%S")
+        }
+    else:
+        # For single-objective optimization
+        best_params = {
+            'trial_number': trial.number,
+            'total_trials': len(study.trials),
+            'value': trial.value,
+            'params': trial.params,
+            'timestamp': datetime.now().strftime("%Y%m%d-%H%M%S")
+        }
     
     # Create results directory if it doesn't exist
     os.makedirs('hparam_results', exist_ok=True)
@@ -58,7 +75,18 @@ def save_best_params(study, trial, env_name):
     history.append(best_params)
     
     # Sort history by value (descending) and add rank
-    history.sort(key=lambda x: x['value'], reverse=True)
+    if isinstance(trial.values, (list, tuple)):
+        # For multi-objective, sort by sum of normalized values
+        for result in history:
+            if isinstance(result.get('values', None), (list, tuple)):
+                result['normalized_sum'] = sum(v / max(abs(v), 1e-10) for v in result['values'])
+            else:
+                result['normalized_sum'] = result.get('value', float('-inf'))
+        history.sort(key=lambda x: x['normalized_sum'], reverse=True)
+    else:
+        # For single-objective
+        history.sort(key=lambda x: x.get('value', float('-inf')), reverse=True)
+    
     for i, result in enumerate(history):
         result['rank'] = i + 1
     
@@ -86,11 +114,9 @@ def get_training_epochs(env_name):
             'diffusion_epoch': 3000
         }
         
-        
 
-
-def objective(trial, base_config, seed=0, debug=False):
-    """Optimization objective function"""
+def objective(trial, base_config, seed=0, debug=False, noise_levels=None):
+    """Multi-objective optimization function that evaluates performance across all noise levels"""
     # Create a deep copy of the Config object
     config = copy.deepcopy(base_config)
     
@@ -100,14 +126,7 @@ def objective(trial, base_config, seed=0, debug=False):
         setattr(config, key.upper(), value)
     
     # Training parameters
-    # config.LEARNING_RATE = trial.suggest_loguniform('learning_rate', 1e-4, 1e-3)
-    # # config.BATCH_SIZE = trial.suggest_int('batch_size', 64, 256)
-    # config.WEIGHT_DECAY = trial.suggest_loguniform('weight_decay', 1e-5, 1e-3)
-    
-    # Loss weights and noise parameters
-    # config.ACTION_LOSS_WEIGHT_BC = trial.suggest_float('action_loss_weight_bc', 0.3, 0.9)
     config.ACTION_LOSS_WEIGHT_DENOISING = trial.suggest_float('action_loss_weight_denoising', 0.05, 0.9)
-    # config.ACTION_NOISE_MULTIPLIER = trial.suggest_loguniform('action_noise_multiplier', 0.0001, 0.1)
     config.STATE_NOISE_MULTIPLIER = trial.suggest_loguniform('state_noise_multiplier', 0.0001, 0.03)
     
     if debug:
@@ -115,38 +134,41 @@ def objective(trial, base_config, seed=0, debug=False):
         seedEverything(seed)
         
         # Train model
-        bc_model, denoising_model, mean_rewards = train_model_joint(config.NUM_DEMS, seed, config, save_ckpt=False, state_only_bc=True)
+        bc_model, denoising_model, mean_scores = train_model_joint(config.NUM_DEMS, seed, config, save_ckpt=False, state_only_bc=True, eval_noise_levels=noise_levels)
         
-        # Use the median of evaluation rewards as objective
-        if mean_rewards and len(mean_rewards['denoising_joint_bc']) > 0:
-            return np.median(mean_rewards['denoising_joint_bc'])
-        else:
-            return float('-inf')
+        # Return scores for all noise levels as multiple objectives
+        return [np.median(mean_scores['denoising_joint_bc'][noise]) if mean_scores and len(mean_scores['denoising_joint_bc'][noise]) > 0 
+                else float('-inf') for noise in noise_levels]
     else:
         try:
-            max_scores = []
+            all_noise_scores = {noise: [] for noise in noise_levels}
             for seed in [0, 1, 2]:
                 seedEverything(seed)
                 
                 # Train model
-                bc_model, denoising_model, mean_scores = train_model_joint(config.NUM_DEMS, seed, config, save_ckpt=False)
-                max_scores.append(np.max(mean_scores['denoising_joint_bc']))
+                bc_model, denoising_model, mean_scores = train_model_joint(config.NUM_DEMS, seed, config, save_ckpt=False, state_only_bc=True, eval_noise_levels=noise_levels)
                 
-            # Use the median of evaluation rewards as objective
-            return np.mean(max_scores)
+                # Collect scores for each noise level
+                for noise in noise_levels:
+                    all_noise_scores[noise].append(np.max(mean_scores['denoising_joint_bc'][noise]))
+            
+            # Return mean scores for all noise levels as multiple objectives
+            return [np.mean(all_noise_scores[noise]) for noise in noise_levels]
         
         except Exception as e:
             print(f"Trial failed with error: {str(e)}")
-            return float('-inf')
+            return [float('-inf')] * len(noise_levels)
 
 def optimize_env(env_name, base_config, n_trials, debug=False):
-    """Run optimization for a single environment"""
+    """Run multi-objective optimization for a single environment"""
     print(f"\n{'='*80}")
     print(f"Optimizing for environment: {env_name}")
     print(f"{'='*80}")
     
+    # Get noise levels for this environment
+    noise_levels = tune_noise_levels.get(env_name, [0.0])  # Default to [0.0] if not specified
+    
     # Update config for this environment
-    # Create temporary config file with updated task name
     tmp_config = base_config.copy()
     tmp_config['ccil_task_name'] = env_name
     
@@ -166,66 +188,75 @@ def optimize_env(env_name, base_config, n_trials, debug=False):
     os.makedirs('hparam_results', exist_ok=True)
     
     # Create storage for study persistence
-    storage_name = f"sqlite:///hparam_results/study_{env_name}.db"
+    storage_name = f"sqlite:///hparam_results/study_{env_name}_multi_objective.db"
     
-    # Load existing study or create new one
+    # Load existing study or create new one with multiple objectives
     try:
         study = optuna.load_study(
-            study_name=f"optimization_{env_name}",
+            study_name=f"optimization_{env_name}_multi_objective",
             storage=storage_name
         )
         print(f"Loaded existing study for {env_name} with {len(study.trials)} trials")
     except:
         study = optuna.create_study(
-            study_name=f"optimization_{env_name}",
+            study_name=f"optimization_{env_name}_multi_objective",
             storage=storage_name,
-            direction="maximize"
+            directions=["maximize"] * len(noise_levels)  # Maximize performance for each noise level
         )
         print(f"Created new study for {env_name}")
     
     if debug:
         # Run without try-except for debugging
         study.optimize(
-            lambda trial: objective(trial, Config, debug=debug),
+            lambda trial: objective(trial, Config, debug=debug, noise_levels=noise_levels),
             n_trials=n_trials,
             callbacks=[
-                lambda study, trial: save_best_params(study, trial, env_name)
+                lambda study, trial: save_best_params(study, trial, f"{env_name}_multi_objective")
             ],
         )
-        
-        print(f"\nOptimization completed for {env_name}!")
-        print("\nBest trial:")
-        trial = study.best_trial
-        print("  Value: ", trial.value)
-        print("  Params: ")
-        for key, value in trial.params.items():
-            print(f"    {key}: {value}")
     else:
         # Run with try-except for production
         try:
             study.optimize(
-                lambda trial: objective(trial, Config, debug=debug),
+                lambda trial: objective(trial, Config, debug=debug, noise_levels=noise_levels),
                 n_trials=n_trials,
                 callbacks=[
-                    lambda study, trial: save_best_params(study, trial, env_name)
+                    lambda study, trial: save_best_params(study, trial, f"{env_name}_multi_objective")
                 ],
             )
-            
-            print(f"\nOptimization completed for {env_name}!")
-            print("\nBest trial:")
-            trial = study.best_trial
-            print("  Value: ", trial.value)
-            print("  Params: ")
-            for key, value in trial.params.items():
-                print(f"    {key}: {value}")
-                
         except KeyboardInterrupt:
             print(f"\nOptimization stopped early for {env_name}.")
-            if study.best_trial:
-                save_best_params(study, study.best_trial, env_name)
+            if study.trials:
+                save_best_params(study, study.best_trials[0], f"{env_name}_multi_objective")
                 print("\nBest parameters so far have been saved.")
     
-    return study.best_trial if study.best_trial else None
+    # Get Pareto front
+    pareto_front = study.best_trials
+    
+    # Format results
+    best_results = {
+        'pareto_front': [
+            {
+                'values': trial.values,  # List of values for each objective
+                'noise_levels': noise_levels,  # Corresponding noise levels
+                'params': trial.params  # Hyperparameters
+            }
+            for trial in pareto_front
+        ]
+    }
+    
+    # Print Pareto front results
+    print("\nPareto Front Results:")
+    for i, trial in enumerate(pareto_front):
+        print(f"\nSolution {i+1}:")
+        print("Values:")
+        for noise, value in zip(noise_levels, trial.values):
+            print(f"  Noise {noise}: {value:.4f}")
+        print("Parameters:")
+        for key, value in trial.params.items():
+            print(f"  {key}: {value}")
+    
+    return best_results
 
 def main():
     parser = argparse.ArgumentParser()
@@ -249,7 +280,7 @@ def main():
         best_trial = optimize_env(env_name, base_config, args.n_trials, debug=args.debug)
         if best_trial:
             results[env_name] = {
-                'value': best_trial.value,
+                'value': best_trial.values,
                 'params': best_trial.params
             }
     

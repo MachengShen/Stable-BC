@@ -43,16 +43,16 @@ def train_model(config_path, seed, timestamp):
         # train_baseline_bc(Config.NUM_DEMS, seed, Config, train_with_noise=True)
         
         # print("Training joint state-action model...")
-        # train_model_joint(Config.NUM_DEMS, seed, Config)
+        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False)
         
         print("Training joint state-action model with state-only BC...")
         train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True)
         
         # print("Training joint state-action model with state-only BC and specialized denoising network...")
-        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True, add_inductive_bias=True)
+        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False, add_inductive_bias=True)
     
     # print("Training joint state-action model with delta state...")
-    # train_model_joint(Config.NUM_DEMS, seed, Config, predict_state_delta=True)
+    # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False, predict_state_delta=True)
     
     # print("Training diffusion policy...")
     # train_diffusion_policy(Config.NUM_DEMS, seed, Config)

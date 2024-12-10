@@ -83,8 +83,11 @@ def save_models(model, denoising_model, num_dems, random_seed, Config, model_sur
     torch.save(model.state_dict(), f"{models_path}/joint_bc_model{model_surfix}.pt")
     torch.save(denoising_model.state_dict(), f"{models_path}/joint_denoising_model{model_surfix}.pt")
 
-def evaluate_model(agent, env, meta_env, device, num_episodes=10, noise_levels=[0.0, 0.0001, 0.0003, 0.0005]):
+def evaluate_model(agent, env, meta_env, device, num_episodes=10, noise_levels=None):
     """Helper function to evaluate a model during training"""
+    if noise_levels is None:
+        noise_levels = [0.0, 0.0001, 0.0003, 0.0005]
+        
     results = {}
     
     for noise in noise_levels:

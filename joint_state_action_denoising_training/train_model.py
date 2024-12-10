@@ -222,15 +222,12 @@ def get_dataloader_kwargs(device, Config):
     }
 
 def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_state_delta=False, 
-                     state_only_bc=False, add_inductive_bias=False):
+                     state_only_bc=True, add_inductive_bias=False, eval_noise_levels=None, score_type='mean_reward',
+                     save_best_model_noise_level=0.0):
     """
     Train joint model with multiple options:
-    1. BC predicts [a_t, x_t+1] or [a_t, delta_x_t], denoiser predicts clean version from noisy inputs
-    2. BC predicts x_t+1 or delta_x_t only, denoiser predicts [a_t, x_t+1] or [a_t, delta_x_t] from [x_t, noisy_x_t+1]
-    
     Args:
-        add_inductive_bias: If True and state_only_bc is True, use DenoisingMLP
-                          with explicit denoising structure
+        score_type: Which metric to use for model selection ('mean_reward' or 'success_rate')
     """
     # Load data based on the task type
     controls_list, x_traj_list = load_data(Config)
@@ -362,7 +359,11 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
     env, meta_env = load_env(Config)
     env.seed(random_seed)
     
-    mean_score = {'joint_bc': [], 'denoising_joint_bc': []}
+    # Initialize mean_score dictionary for all methods and noise levels
+    mean_scores = {}
+    if not state_only_bc:
+        mean_scores['joint_bc'] = {noise: [] for noise in eval_noise_levels} if eval_noise_levels else {0.0: []}
+    mean_scores['denoising_joint_bc'] = {noise: [] for noise in eval_noise_levels} if eval_noise_levels else {0.0: []}
     
     # Keep track of best models and their performance
     best_score = float('-inf')
@@ -478,32 +479,34 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
         # Periodic evaluation
         if epoch % (Config.EVAL_INTERVAL_FACTOR * Config.EPOCH) == 0:
             if not state_only_bc: # state_only_bc requires denoising model
-                # Evaluate BC model
+                # evaluate BC model
                 bc_agent = JointStateActionAgent(
                     model, None, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
                 )
-                bc_results = evaluate_model(bc_agent, env, meta_env, device)
-            
-            # Evaluate denoising model
+                bc_results = evaluate_model(bc_agent, env, meta_env, device, noise_levels=eval_noise_levels)
+            # evaluate denoising model
             denoising_agent = JointStateActionAgent(
                 model, denoising_model, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed), state_only_bc=state_only_bc
             )
-            denoising_results = evaluate_model(denoising_agent, env, meta_env, device)
+            denoising_results = evaluate_model(denoising_agent, env, meta_env, device, noise_levels=eval_noise_levels)
             
-            # Update best models if current performance is better
-            # which noise_level to use for hyperparameter tuning with optuna
-            optuna_noise_level = 0.0001 if 0.0001 in denoising_results else 0.0
-            score_type = 'success_rate' # 'mean_reward'
-            current_score = denoising_results[optuna_noise_level][score_type]
+            # Record scores for all noise levels
+            if not state_only_bc:
+                for noise in bc_results:
+                    mean_scores['joint_bc'][noise].append(bc_results[noise][score_type])
+            
+            for noise in denoising_results:
+                mean_scores['denoising_joint_bc'][noise].append(denoising_results[noise][score_type])
+            
+            # Update best models if current performance is better (using noise=0.0 for selection)
+            if not save_best_model_noise_level in denoising_results:
+                save_best_model_noise_level = list(denoising_results.keys())[0]
+            current_score = denoising_results[save_best_model_noise_level][score_type]
             if current_score > best_score:
                 best_score = current_score
                 best_bc_state = model.state_dict().copy()
                 best_denoising_state = denoising_model.state_dict().copy()
-                print(f"New best model at epoch {epoch} with reward {best_score:.2f}")
-            
-            if not state_only_bc:
-                mean_score['joint_bc'].append(bc_results[optuna_noise_level][score_type])
-            mean_score['denoising_joint_bc'].append(denoising_results[optuna_noise_level][score_type])
+                print(f"New best model at epoch {epoch} with {score_type}: {best_score:.2f}")
             
             # Log evaluation results
             for noise in denoising_results:
@@ -531,7 +534,7 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
 
     print("Joint training completed and models saved.")
     writer.close()
-    return model, denoising_model, mean_score
+    return model, denoising_model, mean_scores
 
 
 def train_baseline_bc(num_dems, random_seed, Config, train_with_noise=False):
