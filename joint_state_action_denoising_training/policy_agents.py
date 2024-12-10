@@ -1,7 +1,7 @@
 import os
 import pickle
 import torch
-
+import numpy as np
 class JointStateActionAgent:
     def __init__(self, bc_model, denoising_model, device, action_dim, stats_path, state_only_bc=False):
         self.bc_model = bc_model
@@ -28,7 +28,10 @@ class JointStateActionAgent:
         """Predict action given state"""
         with torch.no_grad():
             # Normalize state
-            state_tensor = torch.FloatTensor(state).to(self.device)
+            # Convert to numpy array first, then to tensor
+            state_np = np.asarray(state, dtype=np.float32)
+            state_tensor = torch.from_numpy(state_np).to(self.device)
+            # state_tensor = torch.FloatTensor(state).to(self.device)
             if len(state_tensor.shape) == 1:
                 state_tensor = state_tensor.unsqueeze(0)
             state_tensor = self.normalize_state(state_tensor)
@@ -89,7 +92,10 @@ class BaselineBCAgent:
         return action * self.action_std + self.action_mean
 
     def predict(self, state):
-        state_tensor = torch.FloatTensor(state).to(self.device)
+        # Convert to numpy array first, then to tensor
+        state_np = np.asarray(state, dtype=np.float32)
+        state_tensor = torch.from_numpy(state_np).to(self.device)
+        # state_tensor = torch.FloatTensor(state).to(self.device)
         if len(state_tensor.shape) == 1:
             state_tensor = state_tensor.unsqueeze(0)
 
@@ -133,7 +139,10 @@ class DiffusionPolicyAgent:
         return action * self.action_std + self.action_mean
 
     def predict(self, state):
-        state_tensor = torch.FloatTensor(state).to(self.device)
+        # Convert to numpy array first, then to tensor
+        state_np = np.asarray(state, dtype=np.float32)
+        state_tensor = torch.from_numpy(state_np).to(self.device)
+        # state_tensor = torch.FloatTensor(state).to(self.device)
         if len(state_tensor.shape) == 1:
             state_tensor = state_tensor.unsqueeze(0)
 
