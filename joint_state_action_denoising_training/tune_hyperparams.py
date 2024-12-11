@@ -13,6 +13,8 @@ import torch.multiprocessing as mp
 from datetime import datetime
 from misc import update_config
 
+RESULTS_DIR = "/cephfs/cjyai/joint_denoising_hparam_results"
+
 tune_noise_levels = {
     "metaworld-button-press-top-down-v2": [0.0001, 0.0005],
     "metaworld-coffee-push-v2_50": [0.0001, 0.0005],
@@ -31,7 +33,7 @@ def get_default_envs():
     ]
 
     metaworld_envs = [
-        # "metaworld-button-press-top-down-v2",
+        "metaworld-button-press-top-down-v2",
         "metaworld-coffee-push-v2_50",
         "metaworld-coffee-pull-v2_50",
         "metaworld-drawer-close-v2",
@@ -62,10 +64,10 @@ def save_best_params(study, trial, env_name):
         }
 
     # Create results directory if it doesn't exist
-    os.makedirs("hparam_results", exist_ok=True)
+    os.makedirs(RESULTS_DIR, exist_ok=True)
 
     # Load existing results or create new list
-    json_filename = os.path.join("hparam_results", f"best_params_{env_name}.json")
+    json_filename = os.path.join(RESULTS_DIR, f"best_params_{env_name}.json")
     if os.path.exists(json_filename):
         with open(json_filename, "r") as f:
             history = json.load(f)
@@ -222,10 +224,10 @@ def optimize_env(env_name, base_config, n_trials, debug=False):
     os.remove(tmp_config_path)
 
     # Create directory for study storage
-    os.makedirs("hparam_results", exist_ok=True)
+    os.makedirs(f"{RESULTS_DIR}", exist_ok=True)
 
     # Create storage for study persistence
-    storage_name = f"sqlite:///hparam_results/study_{env_name}_multi_objective.db"
+    storage_name = f"sqlite:///{RESULTS_DIR}/study_{env_name}_multi_objective.db"
 
     # Load existing study or create new one with multiple objectives
     try:
@@ -314,22 +316,23 @@ def main():
                        help='Specific environments to optimize. If not provided, will use all MuJoCo and MetaWorld envs')
     parser.add_argument('--debug', action='store_true', help='Run in debug mode without try-except')
     args = parser.parse_args()
-    
+
     # Load base config
-    with open(args.config, 'r') as f:
+    with open(args.config, "r") as f:
         base_config = yaml.safe_load(f)
-    
+
     # Get environments to optimize
     envs_to_optimize = args.envs if args.envs is not None else get_default_envs()
-    
+
     # Run optimization for each environment
     results = {}
     for env_name in envs_to_optimize:
         results[env_name] = optimize_env(env_name, base_config, args.n_trials, debug=args.debug)
     
     # Save overall results
-    with open(os.path.join('hparam_results', 'all_results.json'), 'w') as f:
+    with open(os.path.join(RESULTS_DIR, "all_results.json"), "w") as f:
         json.dump(results, f, indent=4)
+
 
 if __name__ == "__main__":
     # Set start method to spawn
