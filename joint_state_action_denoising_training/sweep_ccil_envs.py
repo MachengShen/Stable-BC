@@ -40,22 +40,24 @@ def train_model(config_path, seed, timestamp):
         print("number of epochs: ", Config.EPOCH)
         
         print("Training baseline BC model...")
-        train_baseline_bc(Config.NUM_DEMS, seed, Config)
+        train_baseline_bc(Config.NUM_DEMS, seed, Config, eval_noise_levels=eval_noise_levels)
 
         print("Training baseline noisy BC model...")
-        train_baseline_bc(Config.NUM_DEMS, seed, Config, train_with_noise=True)
-        
-        # print("Training joint state-action model...")
-        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False)
+        train_baseline_bc(Config.NUM_DEMS, seed, Config, train_with_noise=True, eval_noise_levels=eval_noise_levels)
         
         print("Training joint state-action model with state-only BC...")
-        train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True, eval_noise_levels=eval_noise_levels)
+        train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True, eval_noise_levels=eval_noise_levels, save_best_model_noise_level=0.0005)
+        
+        # print("Training joint state-action model...")
+        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False, eval_noise_levels=eval_noise_levels)
+        
+
         
         # print("Training joint state-action model with state-only BC and specialized denoising network...")
-        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False, add_inductive_bias=True)
+        # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False, add_inductive_bias=True, eval_noise_levels=eval_noise_levels)
     
     # print("Training joint state-action model with delta state...")
-    # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False, predict_state_delta=True)
+    # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False, predict_state_delta=True, eval_noise_levels=eval_noise_levels)
     
     # print("Training diffusion policy...")
     # train_diffusion_policy(Config.NUM_DEMS, seed, Config)
