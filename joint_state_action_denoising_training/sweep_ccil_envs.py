@@ -1,23 +1,25 @@
 import os
+import sys
 import yaml
-import subprocess
 import shutil
-from config import CCIL_TASK_ENV_MAP, CCIL_NUM_DEMS_MAP, Config
 import argparse
-from datetime import datetime
-import time
-from train_model import train_model_joint, train_baseline_bc, train_diffusion_policy
+import datetime
+import torch.multiprocessing as mp
+from config import Config, CCIL_TASK_ENV_MAP
 from utils import seedEverything
-from misc import update_config
-# import torch.multiprocessing as mp
+from train_model import train_model_joint, train_baseline_bc, train_diffusion_policy
 
-def construct_parser():
-    parser = argparse.ArgumentParser(description='Sweep through CCIL environments')
-    parser.add_argument('--base_config', type=str, default='config.yaml', help='Base config file path')
-    parser.add_argument('--seeds', type=int, nargs='+', default=[0, 1, 2], help='Random seeds to use')
-    parser.add_argument('--mode', type=str, choices=['train', 'eval', 'both'], default='both', help='Mode to run')
-    parser.add_argument('--task', type=str, default=None, help='Specific task to run (optional)')
-    return parser
+def get_env_config_path(env_name):
+    """Get the appropriate config file path for the environment"""
+    env_to_config = {
+        'metaworld-button-press-top-down-v2': 'config_button_press.yaml',
+        'metaworld-coffee-push-v2_50': 'config_coffee_push.yaml',
+        'metaworld-coffee-pull-v2_50': 'config_coffee_pull.yaml',
+        'metaworld-drawer-close-v2': 'config_drawer_close.yaml'
+    }
+    
+    # Return environment-specific config if available, otherwise return default
+    return env_to_config.get(env_name, 'config.yaml')
 
 def train_model(config_path, seed, timestamp):
     try:
@@ -34,13 +36,13 @@ def train_model(config_path, seed, timestamp):
         print(f"Config file copied to: {config_copy_path}")
         
         # Train all models
-        # print("Training baseline BC model...")
-        
         eval_noise_levels = [0.0, 0.0001, 0.0003, 0.0005, 0.0007, 0.001, 0.0015, 0.002]
         print("number of epochs: ", Config.EPOCH)
+        
+        print("Training baseline BC model...")
         train_baseline_bc(Config.NUM_DEMS, seed, Config)
 
-        print("Training baseline noisy BC model")
+        print("Training baseline noisy BC model...")
         train_baseline_bc(Config.NUM_DEMS, seed, Config, train_with_noise=True)
         
         # print("Training joint state-action model...")
@@ -63,102 +65,56 @@ def train_model(config_path, seed, timestamp):
         print(f"Training failed with error: {str(e)}")
         return False
 
-def eval_model(config_path, checkpoint_dir, num_episodes=100):
-    # Check if model files exist
-    bc_model_path = os.path.join(checkpoint_dir, "joint_bc_model.pt")
-    denoising_model_path = os.path.join(checkpoint_dir, "joint_denoising_model.pt")
-    
-    if not os.path.exists(bc_model_path) or not os.path.exists(denoising_model_path):
-        print(f"Model files not found in {checkpoint_dir}")
-        return False
-    
-    cmd = [
-        'python', 'eval_model.py',
-        '--config_path', config_path,
-        '--checkpoint_dir', checkpoint_dir,
-        '--num_eval_episodes', str(num_episodes)
-    ]
-    process = subprocess.run(cmd, capture_output=True, text=True)
-    if process.returncode != 0:
-        print("Evaluation failed with error:")
-        print(process.stderr)
-        return False
-    return True
-
-def get_checkpoint_dir(config_path, seed):
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    base_log_path = config['base_log_path']
-    task_name = config['ccil_task_name']
-    return os.path.join(
-        base_log_path,
-        task_name,
-        "results",
-        f"joint_training/{config['num_dems']}dems/{seed}"
-    )
-
 def main():
-    # # Set start method to spawn
-    # mp.set_start_method('spawn', force=True)
-    parser = construct_parser()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='config.yaml', help='Base config file')
+    parser.add_argument('--env', type=str, default=None, help='Specific environment to train on')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[0, 1, 2], help='Random seeds to use')
     args = parser.parse_args()
-
-    # Create timestamp for this sweep
-    sweep_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    sweep_dir = f"sweeps/ccil_sweep_{sweep_timestamp}"
-    os.makedirs(sweep_dir, exist_ok=True)
-
-    # Save sweep configuration
-    sweep_config = {
-        'timestamp': sweep_timestamp,
-        'seeds': args.seeds,
-        'mode': args.mode,
-        'base_config': args.base_config
-    }
-    with open(os.path.join(sweep_dir, 'sweep_config.yaml'), 'w') as f:
-        yaml.dump(sweep_config, f)
-
-    # Get tasks to process
-    tasks = [args.task] if args.task else CCIL_TASK_ENV_MAP.keys()
-
-    # Sweep through environments
-    for task_name in tasks:
-        # Create timestamp for this task
-        task_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    
+    # Generate timestamp for this sweep
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    
+    # Get environments to train on
+    if args.env:
+        envs = [args.env]
+    else:
+        envs = list(CCIL_TASK_ENV_MAP.keys())
+    
+    print(f"Training on environments: {envs}")
+    print(f"Using random seeds: {args.seeds}")
+    
+    for env_name in envs:
+        print(f"\nTraining on environment: {env_name}")
         
-        print(f"\n{'='*80}")
-        print(f"Processing task: {task_name}")
-        print(f"{'='*80}")
-
-        # Create task-specific directory
-        task_dir = os.path.join(sweep_dir, task_name)
-        os.makedirs(task_dir, exist_ok=True)
-
-        # Update config for this task
-        config_path = update_config(args.base_config, task_name, task_dir)
-
+        # Get the appropriate config file for this environment
+        env_config_path = get_env_config_path(env_name)
+        print(f"Using config file: {env_config_path}")
+        
+        # Load and update the config
+        with open(env_config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        # Update environment name
+        config['ccil_task_name'] = env_name
+        
+        # Save temporary config
+        tmp_config_path = os.path.join('tmp', f'config_{env_name}.yaml')
+        os.makedirs('tmp', exist_ok=True)
+        with open(tmp_config_path, 'w') as f:
+            yaml.dump(config, f)
+        
+        # Train with each seed
         for seed in args.seeds:
-            print(f"\nRunning with seed {seed}")
-            checkpoint_dir = get_checkpoint_dir(config_path, seed)
-            
-            if args.mode in ['train', 'both']:
-                print("Training model...")
-                if not train_model(config_path, seed, task_timestamp):
-                    print(f"Skipping evaluation for seed {seed} due to training failure")
-                    continue
-                # Wait a bit to ensure files are saved
-                time.sleep(5)
-
-            if args.mode in ['eval', 'both']:
-                print("Evaluating model...")
-                if not eval_model(config_path, checkpoint_dir):
-                    print(f"Evaluation failed for seed {seed}")
-                    continue
-
-        # Aggregate results for this task
-        print(f"\nCompleted task: {task_name}")
+            print(f"\nTraining with seed {seed}")
+            success = train_model(tmp_config_path, seed, timestamp)
+            if not success:
+                print(f"Training failed for environment {env_name} with seed {seed}")
         
-    print("\nSweep completed!")
+        # Clean up temporary config
+        os.remove(tmp_config_path)
 
 if __name__ == "__main__":
+    # Set start method to spawn
+    mp.set_start_method('spawn', force=True)
     main() 
