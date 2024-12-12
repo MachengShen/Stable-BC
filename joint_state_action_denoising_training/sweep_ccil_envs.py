@@ -36,17 +36,18 @@ def train_model(config_path, seed, timestamp):
         # Train all models
         # print("Training baseline BC model...")
         
+        eval_noise_levels = [0.0, 0.0001, 0.0003, 0.0005, 0.0007, 0.001, 0.0015, 0.002]
         print("number of epochs: ", Config.EPOCH)
         train_baseline_bc(Config.NUM_DEMS, seed, Config)
 
-        # print("Training baseline noisy BC model")
-        # train_baseline_bc(Config.NUM_DEMS, seed, Config, train_with_noise=True)
+        print("Training baseline noisy BC model")
+        train_baseline_bc(Config.NUM_DEMS, seed, Config, train_with_noise=True)
         
         # print("Training joint state-action model...")
         # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False)
         
         print("Training joint state-action model with state-only BC...")
-        train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True)
+        train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=True, eval_noise_levels=eval_noise_levels)
         
         # print("Training joint state-action model with state-only BC and specialized denoising network...")
         # train_model_joint(Config.NUM_DEMS, seed, Config, state_only_bc=False, add_inductive_bias=True)

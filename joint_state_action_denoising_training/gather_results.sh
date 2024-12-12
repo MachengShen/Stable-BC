@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_save_best"
+ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_10dems_metaworld/"
 OUTPUT_FILE="gathered_results.txt"
 
 echo "Gathering evaluation results..." > $OUTPUT_FILE

@@ -365,6 +365,14 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
         mean_scores['joint_bc'] = {noise: [] for noise in eval_noise_levels} if eval_noise_levels else {0.0: []}
     mean_scores['denoising_joint_bc'] = {noise: [] for noise in eval_noise_levels} if eval_noise_levels else {0.0: []}
     
+    # Initialize dictionary to store all evaluation results
+    all_eval_results = {
+        'joint_bc': [] if not state_only_bc else None,
+        'denoising_joint_bc': [],
+        'epochs': [],
+        'noise_levels': eval_noise_levels if eval_noise_levels else [0.0]
+    }
+    
     # Keep track of best models and their performance
     best_score = float('-inf')
     best_bc_state = None
@@ -478,17 +486,19 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
 
         # Periodic evaluation
         if epoch % (Config.EVAL_INTERVAL_FACTOR * Config.EPOCH) == 0:
-            if not state_only_bc: # state_only_bc requires denoising model
-                # evaluate BC model
+            if not state_only_bc:
                 bc_agent = JointStateActionAgent(
                     model, None, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
                 )
                 bc_results = evaluate_model(bc_agent, env, meta_env, device, noise_levels=eval_noise_levels)
-            # evaluate denoising model
+                all_eval_results['joint_bc'].append(bc_results)
+                
             denoising_agent = JointStateActionAgent(
                 model, denoising_model, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed), state_only_bc=state_only_bc
             )
             denoising_results = evaluate_model(denoising_agent, env, meta_env, device, noise_levels=eval_noise_levels)
+            all_eval_results['denoising_joint_bc'].append(denoising_results)
+            all_eval_results['epochs'].append(epoch)
             
             # Record scores for all noise levels
             if not state_only_bc:
@@ -516,13 +526,14 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
                 writer.add_scalar(f'Eval/Denoising_{state_type}_Mean_Reward_{noise}', denoising_results[noise]['mean_reward'], epoch)
                 writer.add_scalar(f'Eval/Denoising_{state_type}_Success_Rate_{noise}', denoising_results[noise]['success_rate'], epoch)
 
+    # After training loop, save all evaluation results
     if save_ckpt:
-        # Save the best models instead of final models
-        model_surfix = "_state_only" if state_only_bc else ""
-        model_surfix += "_specialized_denoising" if add_inductive_bias else ""
         save_path = Config.get_model_path(num_dems, random_seed)
         os.makedirs(save_path, exist_ok=True)
+        model_surfix = "_state_only" if state_only_bc else ""
+        model_surfix += "_specialized_denoising" if add_inductive_bias else ""
         
+        # Save the best models
         if best_bc_state is not None:  # Check if we found a best model
             torch.save(best_bc_state, os.path.join(save_path, f"joint_bc_model{model_surfix}.pt"))
             torch.save(best_denoising_state, os.path.join(save_path, f"joint_denoising_model{model_surfix}.pt"))
@@ -531,13 +542,28 @@ def train_model_joint(num_dems, random_seed, Config, save_ckpt=True, predict_sta
             print("Warning: No best model found, saving final models")
             torch.save(model.state_dict(), os.path.join(save_path, f"joint_bc_model{model_surfix}.pt"))
             torch.save(denoising_model.state_dict(), os.path.join(save_path, f"joint_denoising_model{model_surfix}.pt"))
+        
+        # Save evaluation results
+        results_dict = {
+            'mean_scores': mean_scores,
+            'all_eval_results': all_eval_results,
+            'best_score': best_score,
+            'best_score_noise_level': save_best_model_noise_level,
+            'score_type': score_type,
+            'state_only_bc': state_only_bc,
+            'add_inductive_bias': add_inductive_bias,
+            'predict_state_delta': predict_state_delta
+        }
+        
+        with open(os.path.join(save_path, f'training_results{model_surfix}.pkl'), 'wb') as f:
+            pickle.dump(results_dict, f)
 
     print("Joint training completed and models saved.")
     writer.close()
     return model, denoising_model, mean_scores
 
 
-def train_baseline_bc(num_dems, random_seed, Config, train_with_noise=False):
+def train_baseline_bc(num_dems, random_seed, Config, train_with_noise=False, eval_noise_levels=None):
     """
     Train a baseline BC model that only maps states to actions
     Args:
@@ -606,6 +632,13 @@ def train_baseline_bc(num_dems, random_seed, Config, train_with_noise=False):
     env, meta_env = load_env(Config)
     env.seed(random_seed)
     
+    # Initialize dictionary to store all evaluation results
+    all_eval_results = {
+        'baseline_bc': [],
+        'epochs': [],
+        'noise_levels': eval_noise_levels if eval_noise_levels is not None else [0.0]  # Default noise levels
+    }
+    
     # Keep track of best model and its performance
     best_reward = float('-inf')
     best_model_state = None
@@ -662,7 +695,9 @@ def train_baseline_bc(num_dems, random_seed, Config, train_with_noise=False):
             baseline_agent = BaselineBCAgent(
                 model, device, action_dim, stats_path=Config.get_model_path(num_dems, random_seed)
             )
-            results = evaluate_model(baseline_agent, env, meta_env, device)
+            results = evaluate_model(baseline_agent, env, meta_env, device, noise_levels=eval_noise_levels)
+            all_eval_results['baseline_bc'].append(results)
+            all_eval_results['epochs'].append(epoch)
             
             # Update best model if current performance is better
             current_reward = results[0.0]['mean_reward']
@@ -678,16 +713,28 @@ def train_baseline_bc(num_dems, random_seed, Config, train_with_noise=False):
                 writer.add_scalar(f'Eval/Success_Rate_{noise}{model_suffix}', 
                                 results[noise]['success_rate'], epoch)
 
-    # Save best model with noisy suffix
+    # After training loop, save all evaluation results
     save_path = Config.get_model_path(num_dems, random_seed)
     os.makedirs(save_path, exist_ok=True)
+    model_suffix = "_noisy" if train_with_noise else ""
     
+    # Save best model
     if best_model_state is not None:  # Check if we found a best model
         torch.save(best_model_state, os.path.join(save_path, f"baseline_bc_model{model_suffix}.pt"))
         print(f"Saved best model with reward {best_reward:.2f}")
     else:
         print("Warning: No best model found, saving final model")
         torch.save(model.state_dict(), os.path.join(save_path, f"baseline_bc_model{model_suffix}.pt"))
+    
+    # Save evaluation results
+    results_dict = {
+        'all_eval_results': all_eval_results,
+        'best_reward': best_reward,
+        'train_with_noise': train_with_noise
+    }
+    
+    with open(os.path.join(save_path, f'baseline_bc_results{model_suffix}.pkl'), 'wb') as f:
+        pickle.dump(results_dict, f)
     
     writer.close()
     return model

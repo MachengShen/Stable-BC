@@ -1,0 +1,43 @@
+# General settings
+cuda_visible_devices: "0"
+
+# Task settings
+task_type: "CCIL"  # Options: "sim-quadrotor", "sim-intersection", "CCIL"
+ccil_data_dir: "../CCIL-main/data"  # Only needed for CCIL tasks
+ccil_task_name: 'metaworld-button-press-top-down-v2'    # Only needed for CCIL tasks
+
+# Dataset settings
+num_dems: 10
+
+# Training settings
+# in sweep_ccil_envs.py, epoch is override and scaled by num_dems, 
+# overridein both hparam tuning and sweep_training
+epoch: 1500
+diffusion_epoch: 5000
+lr: 0.0004
+weight_decay: 1.0e-5
+batch_size: 1024
+
+# Diffusion settings
+diffusion_n_steps: 50
+
+# stable bc hparam
+stability_loss_coef: 0.0001
+
+# Dataset settings
+# for state only joint denoising bc
+action_noise_multiplier: 0.0005 # 0.036
+action_loss_weight_denoising: 0.1
+
+# for joint denoising bc
+state_noise_multiplier: 0.005 # 0.06 #0.041
+action_loss_weight_bc: 0.72
+
+# Logging paths
+base_log_path: "/cephfs/cjyai/joint_denoising_bc_10dems_metaworld/" # "/cephfs/cjyai/joint_denoising_bc_debugged/"
+
+
+# Evaluation settings during training
+eval_interval_factor: 0.1  # Evaluate every eval_interval_factor * epoch epochs
+eval_episodes: 10   # Number of episodes per evaluation
+eval_noise_levels: [0.0]  # Noise levels to evaluate on
