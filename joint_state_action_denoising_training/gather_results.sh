@@ -1,17 +1,18 @@
 #!/bin/bash
 
-ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_10dems_metaworld/"
-OUTPUT_FILE="gathered_results.txt"
+ROOT_DIR="/cephfs/cjyai/joint_denoising_bc_10dems_metaworld_optimized/"
+EVAL_RESULTS_FILE="gathered_eval_results.txt"
+TRAINING_RESULTS_FILE="gathered_training_results.txt"
 
-echo "Gathering evaluation results..." > $OUTPUT_FILE
-echo "================================" >> $OUTPUT_FILE
+echo "Gathering evaluation results..." > $EVAL_RESULTS_FILE
+echo "================================" >> $EVAL_RESULTS_FILE
 
-# Function to process a single task directory
-process_task() {
+# Function to process a single task directory for evaluation results
+process_eval_results() {
     local task_dir=$1
     local task_name=$(basename "$task_dir")
-    echo -e "\nTask: $task_name" >> $OUTPUT_FILE
-    echo "================================" >> $OUTPUT_FILE
+    echo -e "\nTask: $task_name" >> $EVAL_RESULTS_FILE
+    echo "================================" >> $EVAL_RESULTS_FILE
     
     # Loop through all timestamp directories in the task directory
     for timestamp_dir in "$task_dir"/*/ ; do
@@ -38,19 +39,24 @@ process_task() {
             # Check if evaluation results exist
             eval_results_file="$seed_dir/eval_results/evaluation_results.txt"
             if [ -f "$eval_results_file" ]; then
-                echo -e "\nTimestamp: $timestamp, $seed" >> $OUTPUT_FILE
-                echo "--------------------------------" >> $OUTPUT_FILE
-                cat "$eval_results_file" >> $OUTPUT_FILE
-                echo "--------------------------------" >> $OUTPUT_FILE
+                echo -e "\nTimestamp: $timestamp, $seed" >> $EVAL_RESULTS_FILE
+                echo "--------------------------------" >> $EVAL_RESULTS_FILE
+                cat "$eval_results_file" >> $EVAL_RESULTS_FILE
+                echo "--------------------------------" >> $EVAL_RESULTS_FILE
             fi
         done
     done
 }
 
-# Process each task directory
+# Process evaluation results
 for task_dir in "$ROOT_DIR"/*/ ; do
     if [ ! -d "$task_dir" ]; then continue; fi
-    process_task "$task_dir"
+    process_eval_results "$task_dir"
 done
 
-echo -e "\nResults gathering completed! Check $OUTPUT_FILE" 
+echo "Processing training results from pickle files..."
+python process_results.py --root_dir "$ROOT_DIR" --output_file "$TRAINING_RESULTS_FILE"
+
+echo -e "\nResults gathering completed!"
+echo "Evaluation results saved to: $EVAL_RESULTS_FILE"
+echo "Training results saved to: $TRAINING_RESULTS_FILE"

@@ -135,10 +135,10 @@ def objective(trial, base_config, seed=0, debug=False, noise_levels=None):
 
     # Training parameters
     config.ACTION_LOSS_WEIGHT_DENOISING = trial.suggest_float(
-        "action_loss_weight_denoising", 0.05, 0.9
+        "action_loss_weight_denoising", 0.01, 0.7
     )
     config.STATE_NOISE_MULTIPLIER = trial.suggest_loguniform(
-        "state_noise_multiplier", 0.0001, 0.03
+        "state_noise_multiplier", 0.00001, 0.03
     )
 
     if debug:
