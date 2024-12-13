@@ -1,0 +1,1323 @@
+
+================================================================================
+Task: metaworld-button-press-top-down-v2
+================================================================================
+
+Timestamp: 20241212-220748
+----------------------------------------
+
+seed0:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3229.68
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 2805.66
+      Success Rate: 95.00%
+    Noise 0.0003:
+      Mean Reward: 1426.73
+      Success Rate: 25.00%
+    Noise 0.0005:
+      Mean Reward: 1393.51
+      Success Rate: 0.00%
+    Noise 0.0007:
+      Mean Reward: 1409.47
+      Success Rate: 0.00%
+    Noise 0.001:
+      Mean Reward: 1328.01
+      Success Rate: 0.00%
+    Noise 0.0015:
+      Mean Reward: 1266.41
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1272.25
+      Success Rate: 0.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3275.14
+      Success Rate: 95.00%
+    Noise 0.0001:
+      Mean Reward: 2444.70
+      Success Rate: 80.00%
+    Noise 0.0003:
+      Mean Reward: 1422.76
+      Success Rate: 0.00%
+    Noise 0.0005:
+      Mean Reward: 1359.84
+      Success Rate: 0.00%
+    Noise 0.0007:
+      Mean Reward: 1383.19
+      Success Rate: 0.00%
+    Noise 0.001:
+      Mean Reward: 1295.38
+      Success Rate: 0.00%
+    Noise 0.0015:
+      Mean Reward: 1273.47
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1236.69
+      Success Rate: 0.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 2554.37
+      Success Rate: 80.00%
+    Noise 0.0001:
+      Mean Reward: 2365.80
+      Success Rate: 70.00%
+    Noise 0.0003:
+      Mean Reward: 2793.54
+      Success Rate: 80.00%
+    Noise 0.0005:
+      Mean Reward: 2446.64
+      Success Rate: 75.00%
+    Noise 0.0007:
+      Mean Reward: 2510.01
+      Success Rate: 65.00%
+    Noise 0.001:
+      Mean Reward: 2188.73
+      Success Rate: 65.00%
+    Noise 0.0015:
+      Mean Reward: 1892.92
+      Success Rate: 45.00%
+    Noise 0.002:
+      Mean Reward: 1858.04
+      Success Rate: 30.00%
+
+
+seed1:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3662.40
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 3112.21
+      Success Rate: 95.00%
+    Noise 0.0003:
+      Mean Reward: 1492.89
+      Success Rate: 40.00%
+    Noise 0.0005:
+      Mean Reward: 1363.81
+      Success Rate: 0.00%
+    Noise 0.0007:
+      Mean Reward: 1255.98
+      Success Rate: 0.00%
+    Noise 0.001:
+      Mean Reward: 1293.29
+      Success Rate: 0.00%
+    Noise 0.0015:
+      Mean Reward: 1255.33
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1241.87
+      Success Rate: 0.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3664.86
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 3442.67
+      Success Rate: 100.00%
+    Noise 0.0003:
+      Mean Reward: 2796.90
+      Success Rate: 80.00%
+    Noise 0.0005:
+      Mean Reward: 2206.76
+      Success Rate: 55.00%
+    Noise 0.0007:
+      Mean Reward: 1557.15
+      Success Rate: 15.00%
+    Noise 0.001:
+      Mean Reward: 1343.37
+      Success Rate: 0.00%
+    Noise 0.0015:
+      Mean Reward: 1287.38
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1286.36
+      Success Rate: 0.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 3212.62
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 3538.59
+      Success Rate: 100.00%
+    Noise 0.0003:
+      Mean Reward: 3231.08
+      Success Rate: 100.00%
+    Noise 0.0005:
+      Mean Reward: 3095.76
+      Success Rate: 95.00%
+    Noise 0.0007:
+      Mean Reward: 2824.26
+      Success Rate: 90.00%
+    Noise 0.001:
+      Mean Reward: 2883.99
+      Success Rate: 95.00%
+    Noise 0.0015:
+      Mean Reward: 2051.81
+      Success Rate: 70.00%
+    Noise 0.002:
+      Mean Reward: 2636.91
+      Success Rate: 85.00%
+
+
+seed2:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3401.96
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 3395.89
+      Success Rate: 100.00%
+    Noise 0.0003:
+      Mean Reward: 2630.04
+      Success Rate: 95.00%
+    Noise 0.0005:
+      Mean Reward: 1690.62
+      Success Rate: 30.00%
+    Noise 0.0007:
+      Mean Reward: 1362.68
+      Success Rate: 0.00%
+    Noise 0.001:
+      Mean Reward: 1312.13
+      Success Rate: 0.00%
+    Noise 0.0015:
+      Mean Reward: 1249.05
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1245.52
+      Success Rate: 0.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3398.34
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 3455.14
+      Success Rate: 100.00%
+    Noise 0.0003:
+      Mean Reward: 3110.13
+      Success Rate: 95.00%
+    Noise 0.0005:
+      Mean Reward: 2114.61
+      Success Rate: 65.00%
+    Noise 0.0007:
+      Mean Reward: 1673.04
+      Success Rate: 45.00%
+    Noise 0.001:
+      Mean Reward: 1331.28
+      Success Rate: 0.00%
+    Noise 0.0015:
+      Mean Reward: 1258.59
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1279.25
+      Success Rate: 0.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 3108.54
+      Success Rate: 90.00%
+    Noise 0.0001:
+      Mean Reward: 2909.31
+      Success Rate: 85.00%
+    Noise 0.0003:
+      Mean Reward: 2380.76
+      Success Rate: 80.00%
+    Noise 0.0005:
+      Mean Reward: 2206.49
+      Success Rate: 70.00%
+    Noise 0.0007:
+      Mean Reward: 2159.49
+      Success Rate: 65.00%
+    Noise 0.001:
+      Mean Reward: 1392.86
+      Success Rate: 5.00%
+    Noise 0.0015:
+      Mean Reward: 1328.82
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1270.75
+      Success Rate: 0.00%
+
+
+seed3:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3082.12
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 3110.20
+      Success Rate: 100.00%
+    Noise 0.0003:
+      Mean Reward: 1888.68
+      Success Rate: 70.00%
+    Noise 0.0005:
+      Mean Reward: 1557.60
+      Success Rate: 50.00%
+    Noise 0.0007:
+      Mean Reward: 1439.28
+      Success Rate: 10.00%
+    Noise 0.001:
+      Mean Reward: 1465.90
+      Success Rate: 10.00%
+    Noise 0.0015:
+      Mean Reward: 1449.83
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1343.94
+      Success Rate: 0.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3056.52
+      Success Rate: 95.00%
+    Noise 0.0001:
+      Mean Reward: 3172.13
+      Success Rate: 95.00%
+    Noise 0.0003:
+      Mean Reward: 2913.47
+      Success Rate: 100.00%
+    Noise 0.0005:
+      Mean Reward: 1965.07
+      Success Rate: 75.00%
+    Noise 0.0007:
+      Mean Reward: 1467.03
+      Success Rate: 35.00%
+    Noise 0.001:
+      Mean Reward: 1385.70
+      Success Rate: 5.00%
+    Noise 0.0015:
+      Mean Reward: 1399.27
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1348.33
+      Success Rate: 0.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 2684.32
+      Success Rate: 80.00%
+    Noise 0.0001:
+      Mean Reward: 2716.05
+      Success Rate: 85.00%
+    Noise 0.0003:
+      Mean Reward: 2278.33
+      Success Rate: 70.00%
+    Noise 0.0005:
+      Mean Reward: 2466.65
+      Success Rate: 90.00%
+    Noise 0.0007:
+      Mean Reward: 2000.49
+      Success Rate: 50.00%
+    Noise 0.001:
+      Mean Reward: 1797.76
+      Success Rate: 60.00%
+    Noise 0.0015:
+      Mean Reward: 1447.76
+      Success Rate: 20.00%
+    Noise 0.002:
+      Mean Reward: 1407.44
+      Success Rate: 5.00%
+
+
+seed4:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3454.32
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 2111.39
+      Success Rate: 65.00%
+    Noise 0.0003:
+      Mean Reward: 1432.03
+      Success Rate: 0.00%
+    Noise 0.0005:
+      Mean Reward: 1340.46
+      Success Rate: 0.00%
+    Noise 0.0007:
+      Mean Reward: 1308.79
+      Success Rate: 0.00%
+    Noise 0.001:
+      Mean Reward: 1219.09
+      Success Rate: 0.00%
+    Noise 0.0015:
+      Mean Reward: 1151.57
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1157.04
+      Success Rate: 0.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3332.29
+      Success Rate: 100.00%
+    Noise 0.0001:
+      Mean Reward: 2259.47
+      Success Rate: 55.00%
+    Noise 0.0003:
+      Mean Reward: 1415.54
+      Success Rate: 0.00%
+    Noise 0.0005:
+      Mean Reward: 1309.10
+      Success Rate: 0.00%
+    Noise 0.0007:
+      Mean Reward: 1307.57
+      Success Rate: 0.00%
+    Noise 0.001:
+      Mean Reward: 1244.92
+      Success Rate: 0.00%
+    Noise 0.0015:
+      Mean Reward: 1266.76
+      Success Rate: 0.00%
+    Noise 0.002:
+      Mean Reward: 1283.80
+      Success Rate: 0.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 2825.23
+      Success Rate: 95.00%
+    Noise 0.0001:
+      Mean Reward: 2917.75
+      Success Rate: 85.00%
+    Noise 0.0003:
+      Mean Reward: 2975.33
+      Success Rate: 90.00%
+    Noise 0.0005:
+      Mean Reward: 2751.57
+      Success Rate: 75.00%
+    Noise 0.0007:
+      Mean Reward: 2576.28
+      Success Rate: 75.00%
+    Noise 0.001:
+      Mean Reward: 2308.06
+      Success Rate: 65.00%
+    Noise 0.0015:
+      Mean Reward: 1618.52
+      Success Rate: 25.00%
+    Noise 0.002:
+      Mean Reward: 1393.07
+      Success Rate: 20.00%
+
+
+Cross-seed Statistics:
+----------------------------------------
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3366.09 ± 88.57
+      Success Rate: 100.00% ± 0.00%
+    Noise 0.0001:
+      Mean Reward: 2907.07 ± 196.54
+      Success Rate: 91.00% ± 5.90%
+    Noise 0.0003:
+      Mean Reward: 1774.07 ± 206.16
+      Success Rate: 46.00% ± 14.93%
+    Noise 0.0005:
+      Mean Reward: 1469.20 ± 60.08
+      Success Rate: 16.00% ± 9.21%
+    Noise 0.0007:
+      Mean Reward: 1355.24 ± 29.71
+      Success Rate: 2.00% ± 1.79%
+    Noise 0.001:
+      Mean Reward: 1323.68 ± 35.91
+      Success Rate: 2.00% ± 1.79%
+    Noise 0.0015:
+      Mean Reward: 1274.44 ± 43.33
+      Success Rate: 0.00% ± 0.00%
+    Noise 0.002:
+      Mean Reward: 1252.12 ± 26.85
+      Success Rate: 0.00% ± 0.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3345.43 ± 87.96
+      Success Rate: 98.00% ± 1.10%
+    Noise 0.0001:
+      Mean Reward: 2954.82 ± 226.21
+      Success Rate: 86.00% ± 7.67%
+    Noise 0.0003:
+      Mean Reward: 2331.76 ± 336.24
+      Success Rate: 55.00% ± 20.30%
+    Noise 0.0005:
+      Mean Reward: 1791.08 ± 170.41
+      Success Rate: 39.00% ± 14.52%
+    Noise 0.0007:
+      Mean Reward: 1477.60 ± 57.43
+      Success Rate: 19.00% ± 8.17%
+    Noise 0.001:
+      Mean Reward: 1320.13 ± 21.20
+      Success Rate: 1.00% ± 0.89%
+    Noise 0.0015:
+      Mean Reward: 1297.09 ± 23.23
+      Success Rate: 0.00% ± 0.00%
+    Noise 0.002:
+      Mean Reward: 1286.89 ± 15.95
+      Success Rate: 0.00% ± 0.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 2877.01 ± 111.38
+      Success Rate: 89.00% ± 3.58%
+    Noise 0.0001:
+      Mean Reward: 2889.50 ± 170.51
+      Success Rate: 85.00% ± 4.24%
+    Noise 0.0003:
+      Mean Reward: 2731.81 ± 160.16
+      Success Rate: 84.00% ± 4.56%
+    Noise 0.0005:
+      Mean Reward: 2593.42 ± 136.34
+      Success Rate: 81.00% ± 4.34%
+    Noise 0.0007:
+      Mean Reward: 2414.10 ± 132.61
+      Success Rate: 69.00% ± 5.90%
+    Noise 0.001:
+      Mean Reward: 2114.28 ± 224.16
+      Success Rate: 58.00% ± 13.08%
+    Noise 0.0015:
+      Mean Reward: 1667.96 ± 120.65
+      Success Rate: 32.00% ± 10.64%
+    Noise 0.002:
+      Mean Reward: 1713.24 ± 225.03
+      Success Rate: 28.00% ± 13.61%
+
+----------------------------------------
+
+================================================================================
+Task: metaworld-coffee-pull-v2_50
+================================================================================
+
+Timestamp: 20241212-220748
+----------------------------------------
+
+seed0:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3837.85
+      Success Rate: 95.00%
+    Noise 0.0001:
+      Mean Reward: 3330.49
+      Success Rate: 90.00%
+    Noise 0.0003:
+      Mean Reward: 3700.17
+      Success Rate: 90.00%
+    Noise 0.0005:
+      Mean Reward: 3589.10
+      Success Rate: 90.00%
+    Noise 0.0007:
+      Mean Reward: 3297.77
+      Success Rate: 90.00%
+    Noise 0.001:
+      Mean Reward: 3106.43
+      Success Rate: 85.00%
+    Noise 0.0015:
+      Mean Reward: 2477.13
+      Success Rate: 65.00%
+    Noise 0.002:
+      Mean Reward: 2600.86
+      Success Rate: 75.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3807.44
+      Success Rate: 95.00%
+    Noise 0.0001:
+      Mean Reward: 3311.32
+      Success Rate: 90.00%
+    Noise 0.0003:
+      Mean Reward: 3531.87
+      Success Rate: 85.00%
+    Noise 0.0005:
+      Mean Reward: 3241.10
+      Success Rate: 85.00%
+    Noise 0.0007:
+      Mean Reward: 3174.22
+      Success Rate: 85.00%
+    Noise 0.001:
+      Mean Reward: 3736.20
+      Success Rate: 95.00%
+    Noise 0.0015:
+      Mean Reward: 2655.32
+      Success Rate: 75.00%
+    Noise 0.002:
+      Mean Reward: 3439.88
+      Success Rate: 90.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 3344.87
+      Success Rate: 95.00%
+    Noise 0.0001:
+      Mean Reward: 3278.71
+      Success Rate: 100.00%
+    Noise 0.0003:
+      Mean Reward: 3410.51
+      Success Rate: 95.00%
+    Noise 0.0005:
+      Mean Reward: 3585.30
+      Success Rate: 95.00%
+    Noise 0.0007:
+      Mean Reward: 3678.25
+      Success Rate: 95.00%
+    Noise 0.001:
+      Mean Reward: 3017.16
+      Success Rate: 90.00%
+    Noise 0.0015:
+      Mean Reward: 3223.38
+      Success Rate: 90.00%
+    Noise 0.002:
+      Mean Reward: 3376.57
+      Success Rate: 90.00%
+
+
+seed1:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3087.90
+      Success Rate: 80.00%
+    Noise 0.0001:
+      Mean Reward: 3090.00
+      Success Rate: 85.00%
+    Noise 0.0003:
+      Mean Reward: 3179.83
+      Success Rate: 80.00%
+    Noise 0.0005:
+      Mean Reward: 2778.01
+      Success Rate: 75.00%
+    Noise 0.0007:
+      Mean Reward: 3316.27
+      Success Rate: 85.00%
+    Noise 0.001:
+      Mean Reward: 3344.83
+      Success Rate: 85.00%
+    Noise 0.0015:
+      Mean Reward: 2828.70
+      Success Rate: 70.00%
+    Noise 0.002:
+      Mean Reward: 3074.15
+      Success Rate: 80.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3215.58
+      Success Rate: 80.00%
+    Noise 0.0001:
+      Mean Reward: 2918.72
+      Success Rate: 85.00%
+    Noise 0.0003:
+      Mean Reward: 2726.06
+      Success Rate: 75.00%
+    Noise 0.0005:
+      Mean Reward: 2688.57
+      Success Rate: 80.00%
+    Noise 0.0007:
+      Mean Reward: 2856.35
+      Success Rate: 80.00%
+    Noise 0.001:
+      Mean Reward: 3265.91
+      Success Rate: 85.00%
+    Noise 0.0015:
+      Mean Reward: 2764.00
+      Success Rate: 75.00%
+    Noise 0.002:
+      Mean Reward: 2817.03
+      Success Rate: 80.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 2469.19
+      Success Rate: 75.00%
+    Noise 0.0001:
+      Mean Reward: 2963.19
+      Success Rate: 80.00%
+    Noise 0.0003:
+      Mean Reward: 2721.18
+      Success Rate: 90.00%
+    Noise 0.0005:
+      Mean Reward: 2384.80
+      Success Rate: 75.00%
+    Noise 0.0007:
+      Mean Reward: 2864.75
+      Success Rate: 75.00%
+    Noise 0.001:
+      Mean Reward: 2414.72
+      Success Rate: 75.00%
+    Noise 0.0015:
+      Mean Reward: 2986.83
+      Success Rate: 75.00%
+    Noise 0.002:
+      Mean Reward: 2465.92
+      Success Rate: 70.00%
+
+
+seed2:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 2879.44
+      Success Rate: 85.00%
+    Noise 0.0001:
+      Mean Reward: 2613.22
+      Success Rate: 75.00%
+    Noise 0.0003:
+      Mean Reward: 2840.04
+      Success Rate: 80.00%
+    Noise 0.0005:
+      Mean Reward: 2603.30
+      Success Rate: 80.00%
+    Noise 0.0007:
+      Mean Reward: 2932.24
+      Success Rate: 85.00%
+    Noise 0.001:
+      Mean Reward: 2831.88
+      Success Rate: 85.00%
+    Noise 0.0015:
+      Mean Reward: 2587.04
+      Success Rate: 85.00%
+    Noise 0.002:
+      Mean Reward: 2738.13
+      Success Rate: 80.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 2897.73
+      Success Rate: 80.00%
+    Noise 0.0001:
+      Mean Reward: 2529.01
+      Success Rate: 80.00%
+    Noise 0.0003:
+      Mean Reward: 2961.15
+      Success Rate: 80.00%
+    Noise 0.0005:
+      Mean Reward: 2678.79
+      Success Rate: 75.00%
+    Noise 0.0007:
+      Mean Reward: 2863.51
+      Success Rate: 75.00%
+    Noise 0.001:
+      Mean Reward: 3022.93
+      Success Rate: 80.00%
+    Noise 0.0015:
+      Mean Reward: 2814.85
+      Success Rate: 85.00%
+    Noise 0.002:
+      Mean Reward: 2482.67
+      Success Rate: 80.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 2185.91
+      Success Rate: 70.00%
+    Noise 0.0001:
+      Mean Reward: 1985.83
+      Success Rate: 65.00%
+    Noise 0.0003:
+      Mean Reward: 1791.06
+      Success Rate: 50.00%
+    Noise 0.0005:
+      Mean Reward: 1792.50
+      Success Rate: 55.00%
+    Noise 0.0007:
+      Mean Reward: 1623.38
+      Success Rate: 65.00%
+    Noise 0.001:
+      Mean Reward: 1752.75
+      Success Rate: 55.00%
+    Noise 0.0015:
+      Mean Reward: 1477.02
+      Success Rate: 50.00%
+    Noise 0.002:
+      Mean Reward: 1382.63
+      Success Rate: 55.00%
+
+
+Cross-seed Statistics:
+----------------------------------------
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 3268.40 ± 237.62
+      Success Rate: 86.67% ± 3.60%
+    Noise 0.0001:
+      Mean Reward: 3011.24 ± 172.09
+      Success Rate: 83.33% ± 3.60%
+    Noise 0.0003:
+      Mean Reward: 3240.01 ± 204.22
+      Success Rate: 83.33% ± 2.72%
+    Noise 0.0005:
+      Mean Reward: 2990.14 ± 247.97
+      Success Rate: 81.67% ± 3.60%
+    Noise 0.0007:
+      Mean Reward: 3182.09 ± 102.09
+      Success Rate: 86.67% ± 1.36%
+    Noise 0.001:
+      Mean Reward: 3094.38 ± 121.00
+      Success Rate: 85.00% ± 0.00%
+    Noise 0.0015:
+      Mean Reward: 2630.95 ± 84.78
+      Success Rate: 73.33% ± 4.91%
+    Noise 0.002:
+      Mean Reward: 2804.38 ± 114.79
+      Success Rate: 78.33% ± 1.36%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 3306.92 ± 217.64
+      Success Rate: 85.00% ± 4.08%
+    Noise 0.0001:
+      Mean Reward: 2919.68 ± 184.39
+      Success Rate: 85.00% ± 2.36%
+    Noise 0.0003:
+      Mean Reward: 3073.03 ± 195.35
+      Success Rate: 80.00% ± 2.36%
+    Noise 0.0005:
+      Mean Reward: 2869.49 ± 151.73
+      Success Rate: 80.00% ± 2.36%
+    Noise 0.0007:
+      Mean Reward: 2964.69 ± 85.55
+      Success Rate: 80.00% ± 2.36%
+    Noise 0.001:
+      Mean Reward: 3341.68 ± 170.94
+      Success Rate: 86.67% ± 3.60%
+    Noise 0.0015:
+      Mean Reward: 2744.72 ± 38.42
+      Success Rate: 78.33% ± 2.72%
+    Noise 0.002:
+      Mean Reward: 2913.19 ± 229.01
+      Success Rate: 83.33% ± 2.72%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 2666.66 ± 284.82
+      Success Rate: 80.00% ± 6.24%
+    Noise 0.0001:
+      Mean Reward: 2742.57 ± 317.77
+      Success Rate: 81.67% ± 8.28%
+    Noise 0.0003:
+      Mean Reward: 2640.92 ± 383.11
+      Success Rate: 78.33% ± 11.63%
+    Noise 0.0005:
+      Mean Reward: 2587.53 ± 430.60
+      Success Rate: 75.00% ± 9.43%
+    Noise 0.0007:
+      Mean Reward: 2722.12 ± 487.82
+      Success Rate: 78.33% ± 7.20%
+    Noise 0.001:
+      Mean Reward: 2394.88 ± 298.13
+      Success Rate: 73.33% ± 8.28%
+    Noise 0.0015:
+      Mean Reward: 2562.41 ± 446.60
+      Success Rate: 71.67% ± 9.53%
+    Noise 0.002:
+      Mean Reward: 2408.37 ± 470.56
+      Success Rate: 71.67% ± 8.28%
+
+----------------------------------------
+
+================================================================================
+Task: metaworld-coffee-push-v2_50
+================================================================================
+
+Timestamp: 20241212-220748
+----------------------------------------
+
+seed0:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 1229.49
+      Success Rate: 35.00%
+    Noise 0.0001:
+      Mean Reward: 1236.15
+      Success Rate: 40.00%
+    Noise 0.0003:
+      Mean Reward: 1431.19
+      Success Rate: 35.00%
+    Noise 0.0005:
+      Mean Reward: 1042.69
+      Success Rate: 40.00%
+    Noise 0.0007:
+      Mean Reward: 1170.72
+      Success Rate: 35.00%
+    Noise 0.001:
+      Mean Reward: 1228.00
+      Success Rate: 35.00%
+    Noise 0.0015:
+      Mean Reward: 1616.65
+      Success Rate: 35.00%
+    Noise 0.002:
+      Mean Reward: 1220.48
+      Success Rate: 30.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 1135.11
+      Success Rate: 30.00%
+    Noise 0.0001:
+      Mean Reward: 1260.67
+      Success Rate: 35.00%
+    Noise 0.0003:
+      Mean Reward: 1437.72
+      Success Rate: 40.00%
+    Noise 0.0005:
+      Mean Reward: 1212.17
+      Success Rate: 30.00%
+    Noise 0.0007:
+      Mean Reward: 1209.99
+      Success Rate: 35.00%
+    Noise 0.001:
+      Mean Reward: 1327.88
+      Success Rate: 30.00%
+    Noise 0.0015:
+      Mean Reward: 1679.32
+      Success Rate: 45.00%
+    Noise 0.002:
+      Mean Reward: 1100.21
+      Success Rate: 30.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 1127.21
+      Success Rate: 30.00%
+    Noise 0.0001:
+      Mean Reward: 1392.49
+      Success Rate: 35.00%
+    Noise 0.0003:
+      Mean Reward: 1310.78
+      Success Rate: 40.00%
+    Noise 0.0005:
+      Mean Reward: 1347.71
+      Success Rate: 40.00%
+    Noise 0.0007:
+      Mean Reward: 1921.90
+      Success Rate: 40.00%
+    Noise 0.001:
+      Mean Reward: 1302.77
+      Success Rate: 40.00%
+    Noise 0.0015:
+      Mean Reward: 1597.94
+      Success Rate: 40.00%
+    Noise 0.002:
+      Mean Reward: 1488.80
+      Success Rate: 40.00%
+
+
+seed1:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 1520.37
+      Success Rate: 45.00%
+    Noise 0.0001:
+      Mean Reward: 1365.44
+      Success Rate: 40.00%
+    Noise 0.0003:
+      Mean Reward: 1144.47
+      Success Rate: 30.00%
+    Noise 0.0005:
+      Mean Reward: 1421.29
+      Success Rate: 35.00%
+    Noise 0.0007:
+      Mean Reward: 1602.20
+      Success Rate: 35.00%
+    Noise 0.001:
+      Mean Reward: 1754.40
+      Success Rate: 45.00%
+    Noise 0.0015:
+      Mean Reward: 1534.43
+      Success Rate: 35.00%
+    Noise 0.002:
+      Mean Reward: 1363.87
+      Success Rate: 35.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 982.25
+      Success Rate: 30.00%
+    Noise 0.0001:
+      Mean Reward: 1355.39
+      Success Rate: 35.00%
+    Noise 0.0003:
+      Mean Reward: 1425.15
+      Success Rate: 40.00%
+    Noise 0.0005:
+      Mean Reward: 1210.71
+      Success Rate: 30.00%
+    Noise 0.0007:
+      Mean Reward: 1548.78
+      Success Rate: 45.00%
+    Noise 0.001:
+      Mean Reward: 1529.75
+      Success Rate: 40.00%
+    Noise 0.0015:
+      Mean Reward: 1244.39
+      Success Rate: 35.00%
+    Noise 0.002:
+      Mean Reward: 1723.89
+      Success Rate: 40.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 682.30
+      Success Rate: 20.00%
+    Noise 0.0001:
+      Mean Reward: 921.48
+      Success Rate: 30.00%
+    Noise 0.0003:
+      Mean Reward: 809.10
+      Success Rate: 20.00%
+    Noise 0.0005:
+      Mean Reward: 1145.09
+      Success Rate: 25.00%
+    Noise 0.0007:
+      Mean Reward: 747.54
+      Success Rate: 25.00%
+    Noise 0.001:
+      Mean Reward: 1120.34
+      Success Rate: 40.00%
+    Noise 0.0015:
+      Mean Reward: 822.28
+      Success Rate: 25.00%
+    Noise 0.002:
+      Mean Reward: 1013.98
+      Success Rate: 30.00%
+
+
+seed2:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 2068.87
+      Success Rate: 50.00%
+    Noise 0.0001:
+      Mean Reward: 1670.62
+      Success Rate: 35.00%
+    Noise 0.0003:
+      Mean Reward: 1142.21
+      Success Rate: 30.00%
+    Noise 0.0005:
+      Mean Reward: 1354.70
+      Success Rate: 40.00%
+    Noise 0.0007:
+      Mean Reward: 1284.80
+      Success Rate: 35.00%
+    Noise 0.001:
+      Mean Reward: 1454.95
+      Success Rate: 40.00%
+    Noise 0.0015:
+      Mean Reward: 1281.29
+      Success Rate: 35.00%
+    Noise 0.002:
+      Mean Reward: 1401.61
+      Success Rate: 30.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 1823.05
+      Success Rate: 40.00%
+    Noise 0.0001:
+      Mean Reward: 1615.09
+      Success Rate: 40.00%
+    Noise 0.0003:
+      Mean Reward: 1051.61
+      Success Rate: 40.00%
+    Noise 0.0005:
+      Mean Reward: 1468.69
+      Success Rate: 45.00%
+    Noise 0.0007:
+      Mean Reward: 1087.48
+      Success Rate: 25.00%
+    Noise 0.001:
+      Mean Reward: 1264.55
+      Success Rate: 35.00%
+    Noise 0.0015:
+      Mean Reward: 1387.37
+      Success Rate: 35.00%
+    Noise 0.002:
+      Mean Reward: 1302.42
+      Success Rate: 35.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 1650.65
+      Success Rate: 40.00%
+    Noise 0.0001:
+      Mean Reward: 921.73
+      Success Rate: 25.00%
+    Noise 0.0003:
+      Mean Reward: 1106.66
+      Success Rate: 30.00%
+    Noise 0.0005:
+      Mean Reward: 973.75
+      Success Rate: 35.00%
+    Noise 0.0007:
+      Mean Reward: 1154.68
+      Success Rate: 35.00%
+    Noise 0.001:
+      Mean Reward: 1205.24
+      Success Rate: 30.00%
+    Noise 0.0015:
+      Mean Reward: 1449.16
+      Success Rate: 50.00%
+    Noise 0.002:
+      Mean Reward: 1159.03
+      Success Rate: 30.00%
+
+
+seed3:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 1932.15
+      Success Rate: 50.00%
+    Noise 0.0001:
+      Mean Reward: 1915.01
+      Success Rate: 55.00%
+    Noise 0.0003:
+      Mean Reward: 2124.11
+      Success Rate: 50.00%
+    Noise 0.0005:
+      Mean Reward: 1626.69
+      Success Rate: 40.00%
+    Noise 0.0007:
+      Mean Reward: 1625.08
+      Success Rate: 45.00%
+    Noise 0.001:
+      Mean Reward: 1488.39
+      Success Rate: 50.00%
+    Noise 0.0015:
+      Mean Reward: 1726.91
+      Success Rate: 50.00%
+    Noise 0.002:
+      Mean Reward: 1431.13
+      Success Rate: 40.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 1826.24
+      Success Rate: 50.00%
+    Noise 0.0001:
+      Mean Reward: 2179.84
+      Success Rate: 55.00%
+    Noise 0.0003:
+      Mean Reward: 1594.88
+      Success Rate: 45.00%
+    Noise 0.0005:
+      Mean Reward: 1908.23
+      Success Rate: 50.00%
+    Noise 0.0007:
+      Mean Reward: 1748.48
+      Success Rate: 45.00%
+    Noise 0.001:
+      Mean Reward: 1500.78
+      Success Rate: 40.00%
+    Noise 0.0015:
+      Mean Reward: 1535.54
+      Success Rate: 50.00%
+    Noise 0.002:
+      Mean Reward: 1542.11
+      Success Rate: 40.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 896.97
+      Success Rate: 30.00%
+    Noise 0.0001:
+      Mean Reward: 1282.87
+      Success Rate: 30.00%
+    Noise 0.0003:
+      Mean Reward: 1242.17
+      Success Rate: 40.00%
+    Noise 0.0005:
+      Mean Reward: 1222.78
+      Success Rate: 45.00%
+    Noise 0.0007:
+      Mean Reward: 1104.33
+      Success Rate: 40.00%
+    Noise 0.001:
+      Mean Reward: 1108.78
+      Success Rate: 35.00%
+    Noise 0.0015:
+      Mean Reward: 1287.33
+      Success Rate: 40.00%
+    Noise 0.002:
+      Mean Reward: 1374.67
+      Success Rate: 45.00%
+
+
+seed4:
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 2002.82
+      Success Rate: 45.00%
+    Noise 0.0001:
+      Mean Reward: 2225.53
+      Success Rate: 55.00%
+    Noise 0.0003:
+      Mean Reward: 2091.75
+      Success Rate: 60.00%
+    Noise 0.0005:
+      Mean Reward: 2895.77
+      Success Rate: 70.00%
+    Noise 0.0007:
+      Mean Reward: 2075.07
+      Success Rate: 55.00%
+    Noise 0.001:
+      Mean Reward: 2003.19
+      Success Rate: 50.00%
+    Noise 0.0015:
+      Mean Reward: 1575.51
+      Success Rate: 40.00%
+    Noise 0.002:
+      Mean Reward: 1798.33
+      Success Rate: 45.00%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 1933.68
+      Success Rate: 40.00%
+    Noise 0.0001:
+      Mean Reward: 1717.36
+      Success Rate: 55.00%
+    Noise 0.0003:
+      Mean Reward: 1928.43
+      Success Rate: 50.00%
+    Noise 0.0005:
+      Mean Reward: 1986.33
+      Success Rate: 45.00%
+    Noise 0.0007:
+      Mean Reward: 2460.31
+      Success Rate: 65.00%
+    Noise 0.001:
+      Mean Reward: 2315.57
+      Success Rate: 55.00%
+    Noise 0.0015:
+      Mean Reward: 2089.39
+      Success Rate: 50.00%
+    Noise 0.002:
+      Mean Reward: 1666.62
+      Success Rate: 50.00%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 1197.13
+      Success Rate: 50.00%
+    Noise 0.0001:
+      Mean Reward: 1281.48
+      Success Rate: 35.00%
+    Noise 0.0003:
+      Mean Reward: 1474.97
+      Success Rate: 45.00%
+    Noise 0.0005:
+      Mean Reward: 1179.04
+      Success Rate: 35.00%
+    Noise 0.0007:
+      Mean Reward: 1625.74
+      Success Rate: 50.00%
+    Noise 0.001:
+      Mean Reward: 890.21
+      Success Rate: 30.00%
+    Noise 0.0015:
+      Mean Reward: 1191.59
+      Success Rate: 40.00%
+    Noise 0.002:
+      Mean Reward: 1824.29
+      Success Rate: 50.00%
+
+
+Cross-seed Statistics:
+----------------------------------------
+
+  baseline_bc:
+    Noise 0.0:
+      Mean Reward: 1750.74 ± 144.56
+      Success Rate: 45.00% ± 2.45%
+    Noise 0.0001:
+      Mean Reward: 1682.55 ± 161.10
+      Success Rate: 45.00% ± 3.74%
+    Noise 0.0003:
+      Mean Reward: 1586.75 ± 196.08
+      Success Rate: 41.00% ± 5.37%
+    Noise 0.0005:
+      Mean Reward: 1668.23 ± 287.00
+      Success Rate: 45.00% ± 5.66%
+    Noise 0.0007:
+      Mean Reward: 1551.57 ± 141.17
+      Success Rate: 41.00% ± 3.58%
+    Noise 0.001:
+      Mean Reward: 1585.79 ± 119.54
+      Success Rate: 44.00% ± 2.61%
+    Noise 0.0015:
+      Mean Reward: 1546.96 ± 65.97
+      Success Rate: 39.00% ± 2.61%
+    Noise 0.002:
+      Mean Reward: 1443.08 ± 85.76
+      Success Rate: 36.00% ± 2.61%
+
+  baseline_bc_noisy:
+    Noise 0.0:
+      Mean Reward: 1540.07 ± 178.00
+      Success Rate: 38.00% ± 3.35%
+    Noise 0.0001:
+      Mean Reward: 1625.67 ± 144.49
+      Success Rate: 44.00% ± 4.10%
+    Noise 0.0003:
+      Mean Reward: 1487.56 ± 126.86
+      Success Rate: 43.00% ± 1.79%
+    Noise 0.0005:
+      Mean Reward: 1557.23 ± 148.90
+      Success Rate: 40.00% ± 3.74%
+    Noise 0.0007:
+      Mean Reward: 1611.01 ± 217.16
+      Success Rate: 43.00% ± 5.93%
+    Noise 0.001:
+      Mean Reward: 1587.71 ± 168.83
+      Success Rate: 40.00% ± 3.74%
+    Noise 0.0015:
+      Mean Reward: 1587.20 ± 129.74
+      Success Rate: 43.00% ± 3.03%
+    Noise 0.002:
+      Mean Reward: 1467.05 ± 104.52
+      Success Rate: 39.00% ± 2.97%
+
+  denoising_joint_bc:
+    Noise 0.0:
+      Mean Reward: 1110.85 ± 145.40
+      Success Rate: 34.00% ± 4.56%
+    Noise 0.0001:
+      Mean Reward: 1160.01 ± 88.90
+      Success Rate: 31.00% ± 1.67%
+    Noise 0.0003:
+      Mean Reward: 1188.73 ± 100.11
+      Success Rate: 35.00% ± 4.00%
+    Noise 0.0005:
+      Mean Reward: 1173.67 ± 54.23
+      Success Rate: 36.00% ± 2.97%
+    Noise 0.0007:
+      Mean Reward: 1310.84 ± 185.14
+      Success Rate: 38.00% ± 3.63%
+    Noise 0.001:
+      Mean Reward: 1125.47 ± 61.14
+      Success Rate: 35.00% ± 2.00%
+    Noise 0.0015:
+      Mean Reward: 1269.66 ± 117.74
+      Success Rate: 39.00% ± 3.58%
+    Noise 0.002:
+      Mean Reward: 1372.15 ± 125.18
+      Success Rate: 39.00% ± 3.58%
+
+----------------------------------------
