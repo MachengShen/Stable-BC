@@ -38,6 +38,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
+from torch.nn.utils import spectral_norm
 
 # Simulate a simple 2D sinusoidal trajectory
 def simulate_trajectory(num_samples, amplitude=1.0, freq=1.0, random_sampling=False):
@@ -71,6 +72,8 @@ def simulate_trajectory(num_samples, amplitude=1.0, freq=1.0, random_sampling=Fa
         y_next = amplitude * np.sin(freq * x_next)
         trajectory = np.column_stack((x, y, x_next, y_next))
 
+    trajectory[:, 0] = trajectory[:, 0] / 3.0 - 1.5
+    trajectory[:, 2] = trajectory[:, 2] / 3.0 - 1.5
     return np.array(trajectory)
 
 def create_clean_dataset(trajectory):
@@ -119,44 +122,69 @@ class BehaviorCloningMLP(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(BehaviorCloningMLP, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)  # New middle layer
+        self.fc3 = nn.Linear(hidden_size, output_size)  # Renamed from fc2 to fc3
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
-        x = self.fc2(x)
+        x = torch.relu(self.fc2(x))  # New middle layer activation
+        x = self.fc3(x)
         return x
 
 # Define the denoising autoencoder
 class DenoisingAutoencoder(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, hidden_size, output_size, use_spectral_norm=False, use_residual=False):
         super(DenoisingAutoencoder, self).__init__()
+        
+        # Helper function to optionally apply spectral norm
+        def maybe_spectral_norm(layer):
+            return spectral_norm(layer) if use_spectral_norm else layer
+        
+        # Encoder with optional spectral normalization
         self.encoder = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
+            maybe_spectral_norm(nn.Linear(input_size, hidden_size)),
             nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
+            maybe_spectral_norm(nn.Linear(hidden_size, output_size)),
+            nn.ReLU(),
         )
+        
+        # Decoder with optional spectral normalization
         self.decoder = nn.Sequential(
-            nn.Linear(output_size, hidden_size),
+            maybe_spectral_norm(nn.Linear(output_size, hidden_size)),
             nn.ReLU(),
-            nn.Linear(hidden_size, input_size)
+            maybe_spectral_norm(nn.Linear(hidden_size, 2))  # Only output the next state (2D)
         )
+        
+        self.use_residual = use_residual
 
     def forward(self, x):
+        # Split input into current state and noisy next state
+        current_state, noisy_next_state = torch.split(x, [x.shape[1] - 2, 2], dim=1)
+        
+        # Pass through encoder-decoder
         encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        denoised_current_state, denoised_next_state = torch.split(decoded, [x.shape[1] - 2, 2], dim=1)
-        return denoised_current_state, denoised_next_state
+        denoised_delta = self.decoder(encoded)  # This is now a correction term
+        
+        # Optionally add residual connection
+        if self.use_residual:
+            denoised_next_state = noisy_next_state + denoised_delta
+        else:
+            denoised_next_state = denoised_delta
+        
+        return denoised_next_state
 
 # Train the MLP using behavior cloning
 def train_behavior_cloning(X, Y, num_epochs=100, batch_size=32, hidden_size=64):
-    X_tensor = torch.tensor(X, dtype=torch.float32)
-    Y_tensor = torch.tensor(Y, dtype=torch.float32)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
+    Y_tensor = torch.tensor(Y, dtype=torch.float32).to(device)
     dataset = TensorDataset(X_tensor, Y_tensor)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     input_size = X.shape[-1]
     output_size = Y.shape[-1]
-    model = BehaviorCloningMLP(input_size, hidden_size, output_size)
+    model = BehaviorCloningMLP(input_size, hidden_size, output_size).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters())
 
@@ -174,25 +202,31 @@ def train_behavior_cloning(X, Y, num_epochs=100, batch_size=32, hidden_size=64):
     return model
 
 # Train the denoising autoencoder
-def train_denoising_autoencoder(X_noisy, Y_noisy, num_epochs=100, batch_size=32, hidden_size=64):
-    X_noisy_tensor = torch.tensor(X_noisy, dtype=torch.float32)
-    Y_noisy_tensor = torch.tensor(Y_noisy, dtype=torch.float32)
+def train_denoising_autoencoder(X_noisy, Y_noisy, num_epochs=100, batch_size=32, hidden_size=64, 
+                              use_spectral_norm=False, use_residual=False, lr=1e-4):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    X_noisy_tensor = torch.tensor(X_noisy, dtype=torch.float32).to(device)
+    Y_noisy_tensor = torch.tensor(Y_noisy, dtype=torch.float32).to(device)
 
     dataset = TensorDataset(X_noisy_tensor, Y_noisy_tensor)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     input_size = X_noisy.shape[-1]
     output_size = Y_noisy.shape[-1] // 2
-    model = DenoisingAutoencoder(input_size, hidden_size, output_size)
+    model = DenoisingAutoencoder(input_size, hidden_size, output_size, 
+                                use_spectral_norm=use_spectral_norm, 
+                                use_residual=use_residual).to(device)
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
     for epoch in range(num_epochs):
         for inputs, targets in dataloader:
             optimizer.zero_grad()
-            denoised_current_state, denoised_next_state = model(inputs)
-            denoised_outputs = torch.cat([denoised_current_state, denoised_next_state], dim=1)
-            loss = criterion(denoised_outputs, targets)
+            denoised_next_state = model(inputs)
+            # Only compare with the next state part of the targets
+            _, target_next_state = torch.split(targets, [targets.shape[1] - 2, 2], dim=1)
+            loss = criterion(denoised_next_state, target_next_state)
             loss.backward()
             optimizer.step()
 
@@ -203,40 +237,36 @@ def train_denoising_autoencoder(X_noisy, Y_noisy, num_epochs=100, batch_size=32,
 
 # Visualize the trajectories
 def visualize_trajectories(bc_model, denoising_model, bc_augment_model, ground_truth, initial_state, num_steps):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ground_truth_trajectory = ground_truth
     bc_trajectory = [initial_state]
     bc_augment_trajectory = [initial_state]
     denoised_trajectory = [initial_state]
 
-    bc_state = torch.tensor(initial_state, dtype=torch.float32).unsqueeze(0)
-    bc_augment_state = torch.tensor(initial_state, dtype=torch.float32).unsqueeze(0)
-    denoised_state = torch.tensor(initial_state, dtype=torch.float32).unsqueeze(0)
+    bc_state = torch.tensor(initial_state, dtype=torch.float32).unsqueeze(0).to(device)
+    bc_augment_state = torch.tensor(initial_state, dtype=torch.float32).unsqueeze(0).to(device)
+    denoised_state = torch.tensor(initial_state, dtype=torch.float32).unsqueeze(0).to(device)
 
     with torch.no_grad():
         for _ in range(num_steps - 1):
             # Generate behavior cloning trajectory
             bc_next_state = bc_model(bc_state)
-            bc_trajectory.append(bc_next_state.squeeze().numpy())
+            bc_trajectory.append(bc_next_state.cpu().squeeze().numpy())
             bc_state = bc_next_state
             
             # Generate behavior cloning trajectory with noisy X
             bc_augment_next_state = bc_augment_model(bc_augment_state)
-            bc_augment_trajectory.append(bc_augment_next_state.squeeze().numpy())
+            bc_augment_trajectory.append(bc_augment_next_state.cpu().squeeze().numpy())
             bc_augment_state = bc_augment_next_state
 
             # Generate denoised trajectory
             bc_next_state_from_denoised = bc_model(denoised_state)
-            print(f"step{_}: bc_next_state_from_denoised={bc_next_state_from_denoised}")
-            
-            # # # Add perturbation noise to the denoising input
-            # noise_factor = 0.05
-            # noise = noise_factor * torch.randn_like(bc_next_state_from_denoised)
-            # bc_next_state_from_denoised = bc_next_state_from_denoised + noise
+            print(f"step{_}: bc_next_state_from_denoised={bc_next_state_from_denoised.cpu()}")
             
             denoising_input = torch.cat([denoised_state, bc_next_state_from_denoised], dim=1)
-            denoised_current_state, denoised_next_state = denoising_model(denoising_input)
-            print(f"step{_}: denoised_current_state={denoised_current_state}; denoised_next_state={denoised_next_state}")
-            denoised_trajectory.append(denoised_next_state.squeeze().numpy())
+            denoised_next_state = denoising_model(denoising_input)
+            print(f"step{_}: denoised_next_state={denoised_next_state.cpu()}")
+            denoised_trajectory.append(denoised_next_state.cpu().squeeze().numpy())
             denoised_state = denoised_next_state
 
     bc_trajectory = np.array(bc_trajectory)
@@ -255,7 +285,9 @@ def visualize_trajectories(bc_model, denoising_model, bc_augment_model, ground_t
     plt.ylabel('Y')
     plt.title('Trajectories Comparison')
     plt.legend()
-    plt.show()
+    plt.tight_layout()
+    plt.savefig('trajectories.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
 def visualize_flow_field(bc_model, denoising_model, bounds=None, n_points=200):
     """
@@ -327,7 +359,9 @@ def visualize_flow_field(bc_model, denoising_model, bounds=None, n_points=200):
     plt.title('Flow Field of Composite Mapping (BC + Denoising)')
     plt.legend()
     plt.grid(True)
-    plt.show()
+    plt.tight_layout()
+    plt.savefig('flow_field.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
 def visualize_multiple_trajectories_comparison(bc_model, denoising_model, ground_truth, 
                                             center_point, radius=0.1, num_trajectories=20, 
@@ -339,7 +373,8 @@ def visualize_multiple_trajectories_comparison(bc_model, denoising_model, ground
     
     # Generate random initial points within a circle
     angles = np.random.uniform(0, 2*np.pi, num_trajectories)
-    distances = np.random.uniform(0, radius, num_trajectories)
+     # use radius / 2.0 as lower bound to avoid too small
+    distances = np.random.uniform(radius / 2.0, radius, num_trajectories)
     initial_points = np.array([
         center_point + [distances[i] * np.cos(angles[i]), 
                        distances[i] * np.sin(angles[i])]
@@ -420,7 +455,8 @@ def visualize_multiple_trajectories_comparison(bc_model, denoising_model, ground
     ax2.grid(True)
     
     plt.tight_layout()
-    plt.show()
+    plt.savefig('multiple_trajectories_comparison.png', dpi=300, bbox_inches='tight')
+    plt.close()
     
     # Plot convergence analysis
     plt.figure(figsize=(12, 4))
@@ -464,7 +500,9 @@ def visualize_multiple_trajectories_comparison(bc_model, denoising_model, ground
     plt.title('Convergence Analysis Comparison')
     plt.legend()
     plt.grid(True)
-    plt.show()
+    plt.tight_layout()
+    plt.savefig('convergence_analysis.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
 def visualize_local_contraction_comparison(bc_model, denoising_model, train_points, 
                                          num_sample_points=5, num_local_samples=20, 
@@ -490,10 +528,11 @@ def visualize_local_contraction_comparison(bc_model, denoising_model, train_poin
         for i, center in enumerate(sample_points):
             # Generate local samples
             angles = np.random.uniform(0, 2*np.pi, num_local_samples)
-            distances = np.random.uniform(0, radius, num_local_samples)
+            # use radius / 2.0 as lower bound to avoid too small
+            distances = np.random.uniform(radius / 2.0, radius, num_local_samples)
             local_samples = np.array([
                 center + [distances[j] * np.cos(angles[j]), 
-                         distances[j] * np.sin(angles[j])]
+                       distances[j] * np.sin(angles[j])]
                 for j in range(num_local_samples)
             ])
             
@@ -506,7 +545,7 @@ def visualize_local_contraction_comparison(bc_model, denoising_model, train_poin
             
             # BC+Denoising mapping
             denoising_input = torch.cat([local_samples_tensor, bc_output], dim=1)
-            _, composite_mapped = denoising_model(denoising_input)
+            composite_mapped = denoising_model(denoising_input)
             composite_mapped = composite_mapped.numpy()
             
             # Plot BC-only mapping (left plot)
@@ -571,28 +610,47 @@ def visualize_local_contraction_comparison(bc_model, denoising_model, train_poin
     ax2.grid(True)
     
     plt.tight_layout()
-    plt.show()
+    plt.savefig('local_contraction_comparison.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-def visualize_xt_sensitivity(bc_model, denoising_model, train_points, train_next_points,
-                           num_sample_points=5, num_local_samples=20, 
-                           radius=0.05):
+def analyze_sensitivity_and_lipschitz(bc_model, denoising_model, train_points, train_next_points,
+                                   num_sample_points=5, num_local_samples=20, 
+                                   radius=0.05):
     """
-    Analyze sensitivity/Lipschitz constant with respect to x_t by comparing BC-only
-    and BC+denoising mappings.
+    Analyze both sensitivity and Lipschitz constants using the same sampled points.
     """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    bc_model = bc_model.to(device)
+    denoising_model = denoising_model.to(device)
+    
     # Randomly sample some training points
     indices = np.random.choice(len(train_points), num_sample_points, replace=False)
     sample_points = train_points[indices]
     sample_next_points = train_next_points[indices]
     
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    # Initialize arrays to store metrics for each region
+    bc_sensitivities = []
+    composite_sensitivities = []
+    lipschitz_xt1_values = []
+    lipschitz_xt_values = []
     
-    # Plot all training points as background in both plots
-    for ax in [ax1, ax2]:
+    # Create figures for both analyses
+    fig_sens, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    fig_lip, ax_lip = plt.subplots(figsize=(12, 8))
+    
+    # Plot all training points as background
+    for ax in [ax1, ax2, ax_lip]:
         ax.scatter(train_points[:, 0], train_points[:, 1], 
-                  color='lightgray', alpha=0.1, s=5, label='Training Points (t)')
-        ax.scatter(train_next_points[:, 0], train_next_points[:, 1], 
-                  color='gray', alpha=0.1, s=5, label='Training Points (t+1)')
+                  color='lightgray', alpha=0.1, s=5, label='Training Points')
+    
+    # Add shape indicators to legend once (will be copied to other plots)
+    ax1.scatter([], [], color='black', marker='*', s=100, label='x_t (★)')
+    ax1.scatter([], [], color='black', marker='^', s=100, label='True x_t+1 (��)')
+    ax1.scatter([], [], color='black', marker='o', s=100, label='Output Centroid (●)')
+    ax1.scatter([], [], color='black', alpha=0.3, s=15, label='Perturbed Points')
+    
+    # Get legend handles and labels to copy later
+    handles, labels = ax1.get_legend_handles_labels()
     
     colors = plt.cm.rainbow(np.linspace(0, 1, num_sample_points))
     
@@ -600,245 +658,383 @@ def visualize_xt_sensitivity(bc_model, denoising_model, train_points, train_next
         for i, (x_t, true_next) in enumerate(zip(sample_points, sample_next_points)):
             # Generate perturbed x_t points
             angles = np.random.uniform(0, 2*np.pi, num_local_samples)
-            distances = np.random.uniform(radius/2, radius, num_local_samples)
+            distances = np.random.uniform(radius / 2.0, radius, num_local_samples)
             perturbed_xt = np.array([
                 x_t + [distances[j] * np.cos(angles[j]), 
                       distances[j] * np.sin(angles[j])]
                 for j in range(num_local_samples)
             ])
             
-            # Convert to tensors
-            perturbed_xt_tensor = torch.tensor(perturbed_xt, dtype=torch.float32)
+            # Convert to tensors and move to device
+            perturbed_xt_tensor = torch.tensor(perturbed_xt, dtype=torch.float32).to(device)
+            x_t_tensor = torch.tensor(x_t, dtype=torch.float32).to(device)
+            true_next_tensor = torch.tensor(true_next, dtype=torch.float32).to(device)
             
             # BC-only mapping
             bc_output = bc_model(perturbed_xt_tensor)
-            bc_output_numpy = bc_output.numpy()  # for plotting
+            bc_output_numpy = bc_output.cpu().numpy()
             
             # BC+Denoising mapping
             denoising_input = torch.cat([perturbed_xt_tensor, bc_output], dim=1)
-            _, denoised_next = denoising_model(denoising_input)
-            denoised_next = denoised_next.numpy()
+            denoised_next = denoising_model(denoising_input)
+            denoised_next_numpy = denoised_next.cpu().numpy()
             
             # Plot BC-only results (left plot)
-            ax1.scatter(x_t[0], x_t[1], color=colors[i], 
-                      s=100, marker='*', label=f'Original x_t {i+1}')
+            ax1.scatter(x_t[0], x_t[1], color=colors[i], s=100, marker='*')
+            ax1.scatter(true_next[0], true_next[1], color=colors[i], s=100, marker='^')
             ax1.scatter(perturbed_xt[:, 0], perturbed_xt[:, 1], 
                       color=colors[i], alpha=0.3, s=15)
             
-            # Draw arrows for BC-only
             for start, end in zip(perturbed_xt, bc_output_numpy):
                 ax1.arrow(start[0], start[1], 
                         end[0]-start[0], end[1]-start[1],
                         head_width=0.02, head_length=0.03, 
                         fc=colors[i], ec=colors[i], alpha=0.2)
             
-            # Calculate and plot BC-only centroid
             bc_centroid = np.mean(bc_output_numpy, axis=0)
             ax1.scatter(bc_centroid[0], bc_centroid[1], 
-                      color=colors[i], s=100, marker='o', label=f'BC Output Centroid {i+1}')
+                      color=colors[i], s=100, marker='o')
             
             # Calculate BC-only sensitivity
             bc_input_perturbations = np.linalg.norm(perturbed_xt - x_t, axis=1)
             bc_output_perturbations = np.linalg.norm(bc_output_numpy - true_next, axis=1)
             bc_sensitivity_ratios = bc_output_perturbations / bc_input_perturbations
-            bc_mean_sensitivity = np.mean(bc_sensitivity_ratios)
-            bc_median_sensitivity = np.median(bc_sensitivity_ratios)
-            bc_max_sensitivity = np.max(bc_sensitivity_ratios)
-            bc_centroid_error = np.linalg.norm(bc_centroid - true_next)
+            bc_sensitivities.append({
+                'mean': np.mean(bc_sensitivity_ratios),
+                'median': np.median(bc_sensitivity_ratios),
+                'max': np.max(bc_sensitivity_ratios)
+            })
             
             # Plot BC+Denoising results (right plot)
-            ax2.scatter(x_t[0], x_t[1], color=colors[i], 
-                      s=100, marker='*', label=f'Original x_t {i+1}')
+            ax2.scatter(x_t[0], x_t[1], color=colors[i], s=100, marker='*')
+            ax2.scatter(true_next[0], true_next[1], color=colors[i], s=100, marker='^')
             ax2.scatter(perturbed_xt[:, 0], perturbed_xt[:, 1], 
                       color=colors[i], alpha=0.3, s=15)
             
-            # Draw arrows for BC+Denoising
-            for start, end in zip(perturbed_xt, denoised_next):
+            for start, end in zip(perturbed_xt, denoised_next_numpy):
                 ax2.arrow(start[0], start[1], 
                         end[0]-start[0], end[1]-start[1],
                         head_width=0.02, head_length=0.03, 
                         fc=colors[i], ec=colors[i], alpha=0.2)
             
-            # Calculate and plot BC+Denoising centroid
-            denoised_centroid = np.mean(denoised_next, axis=0)
+            denoised_centroid = np.mean(denoised_next_numpy, axis=0)
             ax2.scatter(denoised_centroid[0], denoised_centroid[1], 
-                      color=colors[i], s=100, marker='o', label=f'Composite Output Centroid {i+1}')
+                      color=colors[i], s=100, marker='o')
             
             # Calculate BC+Denoising sensitivity
-            composite_input_perturbations = np.linalg.norm(perturbed_xt - x_t, axis=1)
-            composite_output_perturbations = np.linalg.norm(denoised_next - true_next, axis=1)
-            composite_sensitivity_ratios = composite_output_perturbations / composite_input_perturbations
-            composite_mean_sensitivity = np.mean(composite_sensitivity_ratios)
-            composite_median_sensitivity = np.median(composite_sensitivity_ratios)
-            composite_max_sensitivity = np.max(composite_sensitivity_ratios)
-            composite_centroid_error = np.linalg.norm(denoised_centroid - true_next)
+            composite_output_perturbations = np.linalg.norm(denoised_next_numpy - true_next, axis=1)
+            composite_sensitivity_ratios = composite_output_perturbations / bc_input_perturbations
+            composite_sensitivities.append({
+                'mean': np.mean(composite_sensitivity_ratios),
+                'median': np.median(composite_sensitivity_ratios),
+                'max': np.max(composite_sensitivity_ratios)
+            })
             
-            # Calculate sensitivity reduction ratios
-            mean_reduction_ratio = composite_mean_sensitivity / bc_mean_sensitivity
-            median_reduction_ratio = composite_median_sensitivity / bc_median_sensitivity
-            max_reduction_ratio = composite_max_sensitivity / bc_max_sensitivity
-            
-            print(f"Region {i+1} - Sensitivity analysis:")
-            print(f"  BC-only:")
-            print(f"    Mean sensitivity ratio: {bc_mean_sensitivity:.3f}")
-            print(f"    Median sensitivity ratio: {bc_median_sensitivity:.3f}")
-            print(f"    Max sensitivity ratio: {bc_max_sensitivity:.3f}")
-            print(f"    Error (||centroid - true_next||): {bc_centroid_error:.3f}")
-            print(f"  BC+Denoising:")
-            print(f"    Mean sensitivity ratio: {composite_mean_sensitivity:.3f}")
-            print(f"    Median sensitivity ratio: {composite_median_sensitivity:.3f}")
-            print(f"    Max sensitivity ratio: {composite_max_sensitivity:.3f}")
-            print(f"    Error (||centroid - true_next||): {composite_centroid_error:.3f}")
-            print(f"  Sensitivity reduction (composite/BC):")
-            print(f"    Mean reduction ratio: {mean_reduction_ratio:.3f}")
-            print(f"    Median reduction ratio: {median_reduction_ratio:.3f}")
-            print(f"    Max reduction ratio: {max_reduction_ratio:.3f}")
-    
-    ax1.set_xlabel('X')
-    ax1.set_ylabel('Y')
-    ax1.set_title('BC-only Sensitivity Analysis')
-    ax1.legend()
-    ax1.grid(True)
-    
-    ax2.set_xlabel('X')
-    ax2.set_ylabel('Y')
-    ax2.set_title('BC+Denoising Sensitivity Analysis')
-    ax2.legend()
-    ax2.grid(True)
-    
-    plt.tight_layout()
-    plt.show()
-
-def visualize_denoising_lipschitz(denoising_model, train_points, train_next_points,
-                                num_sample_points=5, num_local_samples=20, 
-                                radius=0.05):
-    """
-    Analyze local Lipschitz constant of the denoising network by measuring how perturbations 
-    in the input x_t+1 affect the denoised output while keeping x_t fixed.
-    """
-    # Randomly sample some training points
-    indices = np.random.choice(len(train_points), num_sample_points, replace=False)
-    sample_points = train_points[indices]
-    sample_next_points = train_next_points[indices]
-    
-    fig, ax = plt.subplots(figsize=(12, 8))
-    
-    # Plot all training points as background
-    ax.scatter(train_points[:, 0], train_points[:, 1], 
-              color='lightgray', alpha=0.1, s=5, label='Training Points (t)')
-    ax.scatter(train_next_points[:, 0], train_next_points[:, 1], 
-              color='gray', alpha=0.1, s=5, label='Training Points (t+1)')
-    
-    colors = plt.cm.rainbow(np.linspace(0, 1, num_sample_points))
-    
-    with torch.no_grad():
-        for i, (x_t, true_next) in enumerate(zip(sample_points, sample_next_points)):
+            # Lipschitz Analysis
             # Generate perturbed x_t+1 points
             angles = np.random.uniform(0, 2*np.pi, num_local_samples)
-            distances = np.random.uniform(radius/2, radius, num_local_samples)
+            distances = np.random.uniform(radius / 2.0, radius, num_local_samples)
             perturbed_next = np.array([
                 true_next + [distances[j] * np.cos(angles[j]), 
                            distances[j] * np.sin(angles[j])]
                 for j in range(num_local_samples)
             ])
             
-            # Convert to tensors
-            x_t_tensor = torch.tensor(x_t, dtype=torch.float32).unsqueeze(0)
-            x_t_repeated = x_t_tensor.repeat(num_local_samples, 1)
-            perturbed_next_tensor = torch.tensor(perturbed_next, dtype=torch.float32)
-            
-            # Apply denoising model
+            # Apply denoising model with fixed x_t
+            x_t_repeated = x_t_tensor.unsqueeze(0).repeat(num_local_samples, 1)
+            perturbed_next_tensor = torch.tensor(perturbed_next, dtype=torch.float32).to(device)
             denoising_input = torch.cat([x_t_repeated, perturbed_next_tensor], dim=1)
-            _, denoised_next = denoising_model(denoising_input)
-            denoised_next = denoised_next.numpy()
+            denoised_next = denoising_model(denoising_input)
+            denoised_next_numpy = denoised_next.cpu().numpy()
             
-            # Plot fixed x_t point
-            ax.scatter(x_t[0], x_t[1], color=colors[i], 
-                      s=100, marker='*', label=f'Fixed x_t {i+1}')
+            # Plot Lipschitz analysis
+            ax_lip.scatter(x_t[0], x_t[1], color=colors[i], s=100, marker='*')
+            ax_lip.scatter(true_next[0], true_next[1], color=colors[i], s=100, marker='^')
+            ax_lip.scatter(perturbed_next[:, 0], perturbed_next[:, 1], 
+                         color=colors[i], alpha=0.3, s=15)
             
-            # Plot true x_t+1 point
-            ax.scatter(true_next[0], true_next[1], color=colors[i],
-                      s=100, marker='^', label=f'True x_t+1 {i+1}')
+            for start, end in zip(perturbed_next, denoised_next_numpy):
+                ax_lip.arrow(start[0], start[1], 
+                           end[0]-start[0], end[1]-start[1],
+                           head_width=0.02, head_length=0.03, 
+                           fc=colors[i], ec=colors[i], alpha=0.2)
             
-            # Plot perturbed points and their denoised versions
-            ax.scatter(perturbed_next[:, 0], perturbed_next[:, 1], 
-                      color=colors[i], alpha=0.3, s=15)
-            ax.scatter(denoised_next[:, 0], denoised_next[:, 1],
-                      color=colors[i], alpha=0.3, s=15)
+            denoised_centroid = np.mean(denoised_next_numpy, axis=0)
+            ax_lip.scatter(denoised_centroid[0], denoised_centroid[1], 
+                         color=colors[i], s=100, marker='o')
             
-            # Draw arrows from perturbed to denoised points
-            for start, end in zip(perturbed_next, denoised_next):
-                ax.arrow(start[0], start[1], 
-                        end[0]-start[0], end[1]-start[1],
-                        head_width=0.02, head_length=0.03, 
-                        fc=colors[i], ec=colors[i], alpha=0.2)
-            
-            # Calculate and plot centroid of denoised points
-            denoised_centroid = np.mean(denoised_next, axis=0)
-            ax.scatter(denoised_centroid[0], denoised_centroid[1], 
-                      color=colors[i], s=100, marker='o', label=f'Denoised Centroid {i+1}')
-            
-            # Calculate local Lipschitz constant w.r.t x_t+1
+            # Calculate Lipschitz constants
             input_perturbations_xt1 = np.linalg.norm(perturbed_next - true_next, axis=1)
-            output_perturbations = np.linalg.norm(denoised_next - denoised_centroid, axis=1)
+            output_perturbations = np.linalg.norm(denoised_next_numpy - denoised_centroid, axis=1)
             lipschitz_constants_xt1 = output_perturbations / input_perturbations_xt1
-            mean_lipschitz_xt1 = np.mean(lipschitz_constants_xt1)
-            median_lipschitz_xt1 = np.median(lipschitz_constants_xt1)
-            max_lipschitz_xt1 = np.max(lipschitz_constants_xt1)
+            lipschitz_xt1_values.append({
+                'mean': np.mean(lipschitz_constants_xt1),
+                'median': np.median(lipschitz_constants_xt1),
+                'max': np.max(lipschitz_constants_xt1)
+            })
             
-            # Calculate local Lipschitz constant w.r.t x_t
-            # Create perturbed x_t points
-            angles_xt = np.random.uniform(0, 2*np.pi, num_local_samples)
-            distances_xt = np.random.uniform(0, radius, num_local_samples)
-            perturbed_xt = np.array([
-                x_t + [distances_xt[j] * np.cos(angles_xt[j]), 
-                      distances_xt[j] * np.sin(angles_xt[j])]
-                for j in range(num_local_samples)
-            ])
-            
-            # Convert to tensors and repeat true_next for all perturbed x_t
-            perturbed_xt_tensor = torch.tensor(perturbed_xt, dtype=torch.float32)
-            true_next_tensor = torch.tensor(true_next, dtype=torch.float32).unsqueeze(0)
-            true_next_repeated = true_next_tensor.repeat(num_local_samples, 1)
-            
-            # Apply denoising model with perturbed x_t
+            # Calculate Lipschitz w.r.t x_t
+            perturbed_xt_tensor = torch.tensor(perturbed_xt, dtype=torch.float32).to(device)
+            true_next_repeated = true_next_tensor.unsqueeze(0).repeat(num_local_samples, 1)
             denoising_input_xt = torch.cat([perturbed_xt_tensor, true_next_repeated], dim=1)
-            _, denoised_next_xt = denoising_model(denoising_input_xt)
-            denoised_next_xt = denoised_next_xt.numpy()
+            denoised_next_xt = denoising_model(denoising_input_xt)
+            denoised_next_xt_numpy = denoised_next_xt.cpu().numpy()
             
-            # Calculate centroid for x_t perturbations
-            denoised_centroid_xt = np.mean(denoised_next_xt, axis=0)
-            
-            # Calculate Lipschitz constant w.r.t x_t
+            denoised_centroid_xt = np.mean(denoised_next_xt_numpy, axis=0)
             input_perturbations_xt = np.linalg.norm(perturbed_xt - x_t, axis=1)
-            output_perturbations_xt = np.linalg.norm(denoised_next_xt - denoised_centroid_xt, axis=1)
+            output_perturbations_xt = np.linalg.norm(denoised_next_xt_numpy - true_next, axis=1)
             lipschitz_constants_xt = output_perturbations_xt / input_perturbations_xt
-            mean_lipschitz_xt = np.mean(lipschitz_constants_xt)
-            median_lipschitz_xt = np.median(lipschitz_constants_xt)
-            max_lipschitz_xt = np.max(lipschitz_constants_xt)
+            lipschitz_xt_values.append({
+                'mean': np.mean(lipschitz_constants_xt),
+                'median': np.median(lipschitz_constants_xt),
+                'max': np.max(lipschitz_constants_xt)
+            })
             
-            # Calculate errors
-            centroid_error = np.linalg.norm(denoised_centroid - true_next)
-            centroid_error_xt = np.linalg.norm(denoised_centroid_xt - true_next)
-            
-            print(f"Region {i+1} - Local Lipschitz analysis:")
-            print(f"  With respect to x_t+1:")
-            print(f"    Mean local Lipschitz constant: {mean_lipschitz_xt1:.3f}")
-            print(f"    Median local Lipschitz constant: {median_lipschitz_xt1:.3f}")
-            print(f"    Max local Lipschitz constant: {max_lipschitz_xt1:.3f}")
-            print(f"    Error (||centroid - true_next||): {centroid_error:.3f}")
-            print(f"  With respect to x_t:")
-            print(f"    Mean local Lipschitz constant: {mean_lipschitz_xt:.3f}")
-            print(f"    Median local Lipschitz constant: {median_lipschitz_xt:.3f}")
-            print(f"    Max local Lipschitz constant: {max_lipschitz_xt:.3f}")
-            print(f"    Error (||centroid - true_next||): {centroid_error_xt:.3f}")
+            print(f"Region {i+1} analysis:")
+            print("  Sensitivity analysis:")
+            print(f"    BC-only - Mean: {bc_sensitivities[-1]['mean']:.3f}, Median: {bc_sensitivities[-1]['median']:.3f}, Max: {bc_sensitivities[-1]['max']:.3f}")
+            print(f"    BC+Denoising - Mean: {composite_sensitivities[-1]['mean']:.3f}, Median: {composite_sensitivities[-1]['median']:.3f}, Max: {composite_sensitivities[-1]['max']:.3f}")
+            print("  Lipschitz analysis:")
+            print(f"    w.r.t x_t+1 - Mean: {lipschitz_xt1_values[-1]['mean']:.3f}, Median: {lipschitz_xt1_values[-1]['median']:.3f}, Max: {lipschitz_xt1_values[-1]['max']:.3f}")
+            print(f"    w.r.t x_t - Mean: {lipschitz_xt_values[-1]['mean']:.3f}, Median: {lipschitz_xt_values[-1]['median']:.3f}, Max: {lipschitz_xt_values[-1]['max']:.3f}")
     
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_title('Denoising Network Local Lipschitz Analysis')
-    ax.legend()
-    ax.grid(True)
-    # plt.show()
+    # Calculate and print average metrics across all regions
+    print("\nAverage metrics across all regions:")
+    print("Sensitivity analysis:")
+    print("  BC-only:")
+    print(f"    Mean: {np.mean([s['mean'] for s in bc_sensitivities]):.3f}")
+    print(f"    Median: {np.mean([s['median'] for s in bc_sensitivities]):.3f}")
+    print(f"    Max: {np.mean([s['max'] for s in bc_sensitivities]):.3f}")
+    print("  BC+Denoising:")
+    print(f"    Mean: {np.mean([s['mean'] for s in composite_sensitivities]):.3f}")
+    print(f"    Median: {np.mean([s['median'] for s in composite_sensitivities]):.3f}")
+    print(f"    Max: {np.mean([s['max'] for s in composite_sensitivities]):.3f}")
+    print("Lipschitz analysis:")
+    print("  w.r.t x_t+1:")
+    print(f"    Mean: {np.mean([l['mean'] for l in lipschitz_xt1_values]):.3f}")
+    print(f"    Median: {np.mean([l['median'] for l in lipschitz_xt1_values]):.3f}")
+    print(f"    Max: {np.mean([l['max'] for l in lipschitz_xt1_values]):.3f}")
+    print("  w.r.t x_t:")
+    print(f"    Mean: {np.mean([l['mean'] for l in lipschitz_xt_values]):.3f}")
+    print(f"    Median: {np.mean([l['median'] for l in lipschitz_xt_values]):.3f}")
+    print(f"    Max: {np.mean([l['max'] for l in lipschitz_xt_values]):.3f}")
+    
+    # Set up plots with consistent legends
+    ax1.set_xlabel('X')
+    ax1.set_ylabel('Y')
+    ax1.set_title('BC-only Sensitivity Analysis')
+    ax1.legend(handles, labels)
+    ax1.grid(True)
+    
+    ax2.set_xlabel('X')
+    ax2.set_ylabel('Y')
+    ax2.set_title('BC+Denoising Sensitivity Analysis')
+    ax2.legend(handles, labels)
+    ax2.grid(True)
+    
+    ax_lip.set_xlabel('X')
+    ax_lip.set_ylabel('Y')
+    ax_lip.set_title('Denoising Network Local Lipschitz Analysis')
+    ax_lip.legend(handles, labels)
+    ax_lip.grid(True)
+    
+    plt.tight_layout()
+    plt.savefig('sensitivity_and_lipschitz.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def train_denoising_autoencoder_with_loss_check(X_noisy, Y_noisy, num_epochs=100, batch_size=32, hidden_size=64, 
+                                         use_spectral_norm=False, use_residual=False, lr=1e-4):
+    """Modified training function that returns both model and average loss"""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    X_noisy_tensor = torch.tensor(X_noisy, dtype=torch.float32).to(device)
+    Y_noisy_tensor = torch.tensor(Y_noisy, dtype=torch.float32).to(device)
+
+    dataset = TensorDataset(X_noisy_tensor, Y_noisy_tensor)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    input_size = X_noisy.shape[-1]
+    output_size = Y_noisy.shape[-1] // 2
+    model = DenoisingAutoencoder(input_size, hidden_size, output_size, 
+                                use_spectral_norm=use_spectral_norm, 
+                                use_residual=use_residual).to(device)
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    losses = []
+    for epoch in range(num_epochs):
+        epoch_losses = []
+        for inputs, targets in dataloader:
+            optimizer.zero_grad()
+            denoised_next_state = model(inputs)
+            _, target_next_state = torch.split(targets, [targets.shape[1] - 2, 2], dim=1)
+            loss = criterion(denoised_next_state, target_next_state)
+            loss.backward()
+            optimizer.step()
+            epoch_losses.append(loss.item())
+        
+        avg_epoch_loss = np.mean(epoch_losses)
+        losses.append(avg_epoch_loss)
+        
+        if (epoch + 1) % 2 == 0:
+            print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_epoch_loss:.4f}')
+
+    avg_loss = np.mean(losses[-10:])  # Average of last 10 epochs
+    return model, avg_loss
+
+def analyze_sensitivity_vs_noise(bc_model, num_points=5, num_local_samples=20, radius=0.05):
+    """
+    Analyze how sensitivity reduction ratio changes with different noise factors.
+    Uses rejection sampling to ensure good models for each noise level.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    bc_model = bc_model.to(device)
+    
+    # Use linear-spaced noise factors up to 0.1 instead of 0.2
+    noise_factors = np.linspace(0.005, 0.2, 10)  # Linear range from 0.01 to 0.1
+    required_seeds = 3  # Number of successful seeds needed per noise level
+    max_attempts = 20   # Maximum number of attempts per noise level
+    loss_threshold = 1e-3  # Maximum acceptable loss
+    
+    # Store results for each seed
+    all_reduction_ratios = []
+    
+    for noise_factor in noise_factors:
+        print(f"\nAnalyzing noise factor: {noise_factor:.3f}")
+        reduction_ratios_this_noise = []
+        attempts = 0
+        seed_base = 42
+        
+        while len(reduction_ratios_this_noise) < required_seeds and attempts < max_attempts:
+            current_seed = seed_base + attempts
+            print(f"Attempt {attempts + 1} with seed {current_seed}")
+            
+            # Set random seed
+            np.random.seed(current_seed)
+            torch.manual_seed(current_seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed(current_seed)
+                torch.cuda.manual_seed_all(current_seed)
+            
+            # Create new denoising model for this noise level
+            X_denoisingAE, Y_denoisingAE = create_denoisingAE_dataset(X_clean, Y_clean, 
+                                                                     noise_factor=[0.0, noise_factor], 
+                                                                     num_noisy_samples=50)
+            denoising_model, avg_loss = train_denoising_autoencoder_with_loss_check(
+                X_denoisingAE, Y_denoisingAE, 
+                num_epochs=300,
+                use_spectral_norm=False,
+                use_residual=False,
+                lr=1e-4
+            )
+            denoising_model = denoising_model.to(device)
+            
+            print(f"Average loss: {avg_loss:.6f}")
+            
+            if avg_loss > loss_threshold:
+                print(f"Rejecting model (loss = {avg_loss:.6f} > {loss_threshold})")
+                attempts += 1
+                continue
+            
+            print(f"Accepting model (loss = {avg_loss:.6f})")
+            
+            # Randomly sample points for analysis
+            indices = np.random.choice(len(X_clean), num_points, replace=False)
+            sample_points = X_clean[indices]
+            sample_next_points = Y_clean[indices]
+            
+            bc_sensitivities = []
+            composite_sensitivities = []
+            
+            with torch.no_grad():
+                for x_t, true_next in zip(sample_points, sample_next_points):
+                    # Generate perturbed points
+                    angles = np.random.uniform(0, 2*np.pi, num_local_samples)
+                    distances = np.random.uniform(0, radius, num_local_samples)
+                    perturbed_xt = np.array([
+                        x_t + [distances[j] * np.cos(angles[j]), 
+                              distances[j] * np.sin(angles[j])]
+                        for j in range(num_local_samples)
+                    ])
+                    
+                    # BC-only mapping
+                    perturbed_xt_tensor = torch.tensor(perturbed_xt, dtype=torch.float32).to(device)
+                    bc_output = bc_model(perturbed_xt_tensor)
+                    bc_output_numpy = bc_output.cpu().numpy()
+                    
+                    # BC+Denoising mapping
+                    denoising_input = torch.cat([perturbed_xt_tensor, bc_output], dim=1)
+                    denoised_next = denoising_model(denoising_input)
+                    denoised_next = denoised_next.cpu().numpy()
+                    
+                    # Calculate sensitivities
+                    bc_input_perturbations = np.linalg.norm(perturbed_xt - x_t, axis=1)
+                    
+                    bc_output_perturbations = np.linalg.norm(bc_output_numpy - true_next, axis=1)
+                    bc_sensitivity_ratios = bc_output_perturbations / bc_input_perturbations
+                    bc_sensitivities.append(np.mean(bc_sensitivity_ratios))
+                    
+                    composite_output_perturbations = np.linalg.norm(denoised_next - true_next, axis=1)
+                    composite_sensitivity_ratios = composite_output_perturbations / bc_input_perturbations
+                    composite_sensitivities.append(np.mean(composite_sensitivity_ratios))
+            
+            mean_bc = np.mean(bc_sensitivities)
+            mean_denoising = np.mean(composite_sensitivities)
+            reduction_ratio = mean_denoising / mean_bc
+            reduction_ratios_this_noise.append(reduction_ratio)
+            
+            print(f"Reduction ratio: {reduction_ratio:.3f}")
+            attempts += 1
+        
+        if len(reduction_ratios_this_noise) < required_seeds:
+            print(f"Warning: Could only find {len(reduction_ratios_this_noise)} valid models for noise factor {noise_factor:.3f}")
+        
+        all_reduction_ratios.append(reduction_ratios_this_noise)
+    
+    # Process results, handling cases where we didn't get enough seeds
+    mean_reduction_ratios = []
+    std_reduction_ratios = []
+    
+    for ratios in all_reduction_ratios:
+        if len(ratios) > 0:
+            mean_reduction_ratios.append(np.mean(ratios))
+            std_reduction_ratios.append(np.std(ratios) if len(ratios) > 1 else 0)
+        else:
+            mean_reduction_ratios.append(np.nan)
+            std_reduction_ratios.append(np.nan)
+    
+    mean_reduction_ratios = np.array(mean_reduction_ratios)
+    std_reduction_ratios = np.array(std_reduction_ratios)
+    
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+    
+    # Plot reduction ratio with error band
+    plt.plot(noise_factors, mean_reduction_ratios, 'b-', label='Mean Reduction Ratio')
+    plt.fill_between(noise_factors, 
+                     mean_reduction_ratios - std_reduction_ratios,
+                     mean_reduction_ratios + std_reduction_ratios,
+                     color='b', alpha=0.2, label='±1 std')
+    
+    # Set labels (removed title, changed x-label)
+    plt.xlabel('Noise STD')
+    plt.ylabel('Sensitivity Reduction Ratio (Denoising/BC)')
+    plt.grid(True)
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig('sensitivity_reduction_vs_noise.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Print final statistics
+    print("\nFinal statistics across accepted seeds:")
+    for i, noise in enumerate(noise_factors):
+        if not np.isnan(mean_reduction_ratios[i]):
+            print(f"Noise factor {noise:.3f}:")
+            print(f"  Mean reduction ratio: {mean_reduction_ratios[i]:.3f} ± {std_reduction_ratios[i]:.3f}")
+            print(f"  (Using {len(all_reduction_ratios[i])} seeds)")
+        else:
+            print(f"Noise factor {noise:.3f}: No valid models found")
 
 # Example usage
 # Set random seeds for reproducibility
@@ -852,20 +1048,26 @@ def seed_everything(seed=42):
     torch.backends.cudnn.benchmark = False
 
 if __name__ == "__main__":
-    seed_everything(6)
+    # need to normalize the states to ensure training performance!!
+    
+    seed_everything(7)
     random_sampling = False
     num_steps = 50
-    num_epochs = 200    
+    # keep num_epochs low to ensure bc has covarite-shift problem
+    num_epochs = 300
     ground_truth = simulate_trajectory(num_steps, random_sampling=random_sampling, freq=2.0)
     X_clean, Y_clean = create_clean_dataset(ground_truth)
-    X_denoisingAE, Y_denoisingAE = create_denoisingAE_dataset(X_clean, Y_clean, noise_factor=[0.0, 0.05], num_noisy_samples=50)
+    X_denoisingAE, Y_denoisingAE = create_denoisingAE_dataset(X_clean, Y_clean, noise_factor=[0.0, 0.05], num_noisy_samples=50) # 0.07 best
     X_augment, Y_augment = create_augment_dataset(X_clean, Y_clean, noise_factor=0.02, num_noisy_samples=50)
     print(f"X_noisy: {X_denoisingAE}; Y_noisy: {Y_denoisingAE}")
     bc_model = train_behavior_cloning(X_clean, Y_clean, num_epochs=num_epochs)
     bc_augment_model = train_behavior_cloning(X_augment, Y_augment, num_epochs=num_epochs)
-    denoising_model = train_denoising_autoencoder(X_denoisingAE, Y_denoisingAE, num_epochs=num_epochs)
-
-    initial_state = ground_truth[0][:2] * 0.01
+    denoising_model = train_denoising_autoencoder(X_denoisingAE, Y_denoisingAE, 
+                                                 num_epochs=num_epochs,
+                                                 use_spectral_norm=False,  # Enable spectral normalization
+                                                 use_residual=False)      # Enable residual connection
+    assert random_sampling == False
+    initial_state = ground_truth[0][:2]
     visualize_trajectories(bc_model, denoising_model, bc_augment_model, ground_truth, initial_state, num_steps=num_steps)
 
     # After training the models, add:
@@ -895,14 +1097,11 @@ if __name__ == "__main__":
     #                                      radius=0.05)
 
     # After the previous visualizations, add:
-    print("\nVisualizing sensitivity with respect to x_t...")
-    visualize_xt_sensitivity(bc_model, denoising_model, X_clean, Y_clean,
-                           num_sample_points=10, num_local_samples=20,
-                           radius=0.05)
-    
-    # Then analyze Lipschitz constant of the denoising
-    print("\nVisualizing denoising network local Lipschitz constants...")
-    visualize_denoising_lipschitz(denoising_model, X_clean, Y_clean,
-                                num_sample_points=10, num_local_samples=20,
-                                radius=0.05)
+    print("\nAnalyzing sensitivity and Lipschitz constants...")
+    analyze_sensitivity_and_lipschitz(bc_model, denoising_model, X_clean, Y_clean,
+                                    num_sample_points=10, num_local_samples=20,
+                                    radius=0.01)
+
+    print("\nAnalyzing sensitivity vs noise factor...")
+    analyze_sensitivity_vs_noise(bc_model)
 
