@@ -208,7 +208,7 @@ def main():
     print("Finished training drift.\n")
 
     print("Training denoising network d...")
-    net_d = train_network(net_d, X_d, Y_d, epochs=2000, lr=1e-3)
+    net_d = train_network(net_d, X_d, Y_d, epochs=500, lr=1e-3)
     print("Finished training denoising.\n")
 
     # Set noise scale for rollout
@@ -302,11 +302,11 @@ def main():
     ax.plot(traj_fd_x, traj_fd_y, color=fd_color, linestyle='-', linewidth=3, label="Trajectory (f+d)")
     ax.plot([x0], [y0], 'ko', markersize=12, label="Initial state")
     
-    ax.legend(loc='upper right')
+    # Add legend with larger font
+    ax.legend(loc='upper right', fontsize=14)
     ax.set_xlim([-1.2*np.pi, 1.2*np.pi])  # Match grid x range
     ax.set_ylim([-2.0, 2.0])              # Match grid y range
     ax.grid(True, linestyle='--', alpha=0.3)
-    ax.set_title("Trajectory Comparison: f vs f+d")
     
     plt.tight_layout()
     # Save the comparison figure
